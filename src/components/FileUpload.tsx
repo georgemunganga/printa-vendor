@@ -201,6 +201,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected }) => {
               <h3 className="text-lg font-medium mb-2">
                 {dragActive ? 'Drop files here' : 'Drag and drop files here'}
               </h3>
+              <p className="text-xs text-gray-500 mb-3">
+                Use real sample jobs so your team can validate production quality during onboarding.
+              </p>
 
               <p className="text-gray-500 mb-4 text-sm">
                 or

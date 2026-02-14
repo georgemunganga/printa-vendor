@@ -19,6 +19,7 @@ const PRIMARY_TABS = [
   "/dashboard/profile",
   "/dashboard/pos",
   "/dashboard/shift-management",
+  "/dashboard/stores",
 ];
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, pageTitle, hideMobileBottomNav = false }) => {

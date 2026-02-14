@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { motion } from 'framer-motion';
 import { ArrowRight, ArrowLeft, Check, Package } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { getWorkflowForCategory } from '@/data/customizationWorkflows';
+import { patchVendorOnboardingState } from '@/lib/vendorOnboardingState';
 
 const Customize = () => {
   const [searchParams] = useSearchParams();
@@ -14,7 +15,14 @@ const Customize = () => {
 
   const [workflowSelections, setWorkflowSelections] = useState<Record<number, string>>({});
   const [instructions, setInstructions] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [branchCount, setBranchCount] = useState('');
+  const [enabledServices, setEnabledServices] = useState<string[]>([]);
+  const [basePriceRule, setBasePriceRule] = useState('');
+  const [fulfillmentMode, setFulfillmentMode] = useState<'pickup' | 'delivery' | 'both' | ''>('');
+  const [hasEmployeePin, setHasEmployeePin] = useState(false);
   const workflowSteps = workflowGuide?.steps ?? [];
+  const serviceChoices = ['Paper', 'Cards', 'Banners', 'Books', 'Apparel'];
 
   const handleWorkflowSelect = (stepIndex: number, choiceLabel: string) => {
     setWorkflowSelections(prev => ({
@@ -27,6 +35,17 @@ const Customize = () => {
   const allStepsComplete = workflowSteps.length > 0
     ? workflowSteps.every((_, index) => isStepComplete(index))
     : false;
+
+  useEffect(() => {
+    patchVendorOnboardingState({
+      businessProfileDone: businessName.trim().length > 0 && branchCount.trim().length > 0,
+      servicesDone: enabledServices.length > 0,
+      pricingDone: basePriceRule.trim().length > 0,
+      fulfillmentDone: fulfillmentMode !== '',
+      teamSecurityDone: hasEmployeePin,
+      specsCompleted: allStepsComplete,
+    });
+  }, [allStepsComplete, basePriceRule, branchCount, businessName, enabledServices.length, fulfillmentMode, hasEmployeePin]);
 
   return (
     <Layout>
@@ -41,11 +60,11 @@ const Customize = () => {
           <div className="mb-8 flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold lg:mb-2">
-                {workflowGuide ? workflowGuide.name : 'Customize Your Print'}
+                {workflowGuide ? `Step 2: ${workflowGuide.name}` : 'Step 2: Customize Test Job'}
               </h1>
-              {/* <p className="text-gray-600">
-                {workflowGuide ? workflowGuide.intro : 'Select your preferred print options'}
-              </p> */}
+              <p className="text-gray-600 text-sm">
+                Answer these setup questions to improve print quality, reduce rework, and speed up customer fulfillment.
+              </p>
             </div>
 
             <div className="hidden md:flex items-center space-x-2 text-sm text-gray-500">
@@ -82,7 +101,10 @@ const Customize = () => {
                     className="bg-white rounded-xl shadow-md p-4 sm:p-6"
                   >
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-medium">{step.question}</h3>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-printa-red font-semibold mb-1">Vendor Value Setup</p>
+                        <h3 className="text-lg font-medium">{step.question}</h3>
+                      </div>
                       {selectedChoice && (
                         <div className="flex items-center justify-center w-8 h-8 rounded-full bg-printa-red text-white">
                           <Check size={16} />
@@ -126,10 +148,10 @@ const Customize = () => {
 
           <div className="mb-6">
             <label htmlFor="workflow-instructions" className="block text-sm font-semibold text-gray-700 mb-2">
-              Special Instructions
+              Service Notes
             </label>
             <p className="text-xs text-gray-400 mb-2">
-              Let us know any extra preferences—this field is always available no matter your workflow.
+              Add operational notes your team should consistently apply for similar jobs.
             </p>
             <textarea
               id="workflow-instructions"
@@ -139,6 +161,74 @@ const Customize = () => {
               className="w-full rounded-xl border border-gray-200 p-3 text-sm leading-relaxed focus:border-printa-red focus:outline-none transition"
               rows={4}
             />
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 mb-6 space-y-4">
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-printa-red font-semibold">Vendor Value Setup</p>
+              <h3 className="text-lg font-semibold text-gray-900">Configure what directly impacts revenue and operations</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                placeholder="Business name"
+                className="h-11 rounded-xl border border-gray-200 px-3 text-sm"
+              />
+              <input
+                value={branchCount}
+                onChange={(e) => setBranchCount(e.target.value)}
+                placeholder="How many branches?"
+                className="h-11 rounded-xl border border-gray-200 px-3 text-sm"
+              />
+              <input
+                value={basePriceRule}
+                onChange={(e) => setBasePriceRule(e.target.value)}
+                placeholder="Base price rule (e.g. A4 color starts at K5)"
+                className="h-11 rounded-xl border border-gray-200 px-3 text-sm md:col-span-2"
+              />
+              <div className="md:col-span-2">
+                <p className="text-xs text-gray-500 mb-2">Services you currently offer</p>
+                <div className="flex flex-wrap gap-2">
+                  {serviceChoices.map((svc) => {
+                    const active = enabledServices.includes(svc);
+                    return (
+                      <button
+                        key={svc}
+                        type="button"
+                        onClick={() => setEnabledServices((prev) => active ? prev.filter((p) => p !== svc) : [...prev, svc])}
+                        className={`px-3 py-1.5 rounded-lg text-xs border transition ${active ? 'bg-printa-red text-white border-printa-red' : 'bg-white text-gray-700 border-gray-300'}`}
+                      >
+                        {svc}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-xs text-gray-500 mb-2">Fulfillment mode</p>
+                <div className="flex gap-2">
+                  {(['pickup', 'delivery', 'both'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setFulfillmentMode(m)}
+                      className={`px-3 py-1.5 rounded-lg text-xs border transition ${fulfillmentMode === m ? 'bg-printa-red text-white border-printa-red' : 'bg-white text-gray-700 border-gray-300'}`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="md:col-span-2 flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={hasEmployeePin}
+                  onChange={(e) => setHasEmployeePin(e.target.checked)}
+                />
+                At least one employee PIN is configured
+              </label>
+            </div>
           </div>
 
           {!workflowGuide && (
@@ -169,7 +259,7 @@ const Customize = () => {
                 </div>
                 <div>
                   <p className="font-semibold text-green-800">All options selected!</p>
-                  <p className="text-sm text-green-600">You're ready to proceed to checkout</p>
+                  <p className="text-sm text-green-600">Great. You have a repeatable service setup and can proceed to checkout.</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl p-3 space-y-2">
@@ -208,3 +298,6 @@ const Customize = () => {
 };
 
 export default Customize;
+
+
+

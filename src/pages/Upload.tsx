@@ -7,6 +7,7 @@ import { ArrowRight, CheckCircle, Upload as UploadIcon } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from "sonner";
 import { Button } from '@/components/ui/button';
+import { patchVendorOnboardingState } from '@/lib/vendorOnboardingState';
 
 
 const Upload = () => {
@@ -78,6 +79,10 @@ const Upload = () => {
     };
   }, []);
 
+  useEffect(() => {
+    patchVendorOnboardingState({ filesUploaded: selectedFiles.length });
+  }, [selectedFiles.length]);
+
   return (
     <Layout>
       {/* Full-page drag overlay */}
@@ -120,9 +125,9 @@ const Upload = () => {
         <div className="max-w-4xl mx-auto px-4 lg:px-2" >
           <div className="mb-8 flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold mb-2">Upload Documents</h1>
+              <h1 className="text-3xl font-bold mb-2">Step 1: Upload Test Files</h1>
               <p className="text-gray-600">
-                Upload the files you want to print
+                Onboard your store by submitting a sample customer print job
               </p>
             </div>
             
@@ -173,3 +178,5 @@ const Upload = () => {
 };
 
 export default Upload;
+
+

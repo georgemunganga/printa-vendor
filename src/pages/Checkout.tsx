@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { DEFAULT_LOCATIONS, Location } from '@/data/locations';
 import { getApiKey } from '../../config/api-keys';
 import { useLoadScript } from '@react-google-maps/api';
+import { getVendorOnboardingState, patchVendorOnboardingState } from '@/lib/vendorOnboardingState';
 
 const MapPicker = lazy(() => import('@/components/MapPicker'));
 
@@ -35,6 +36,7 @@ const Checkout = () => {
   const deliverySearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [currentLocationAddress, setCurrentLocationAddress] = useState<string>('');
   const [hasAutoLocated, setHasAutoLocated] = useState(false);
+  const [onboardingSnapshot, setOnboardingSnapshot] = useState(getVendorOnboardingState());
 
   const locationOptions = DEFAULT_LOCATIONS;
 
@@ -359,9 +361,18 @@ const Checkout = () => {
   }, [applyLocation, currentCoords, deliveryMethod, hasAutoLocated, selectNearestPickup]);
 
   const handleCheckout = () => {
-    toast.success("Order placed successfully!");
-    setTimeout(() => navigate('/profile'), 2000);
+    patchVendorOnboardingState({ testOrderCompleted: true });
+    setOnboardingSnapshot(getVendorOnboardingState());
+    toast.success("Onboarding test order completed. Opening dashboard...");
+    setTimeout(() => navigate('/dashboard'), 1200);
   };
+
+  useEffect(() => {
+    if (selectedLocationId) {
+      patchVendorOnboardingState({ fulfillmentDone: true });
+      setOnboardingSnapshot(getVendorOnboardingState());
+    }
+  }, [selectedLocationId]);
 
   const handleUseCurrentLocation = () => {
     if (deliveryMethod === 'pickup') {
@@ -724,8 +735,8 @@ const Checkout = () => {
               {/* Header */}
               <div className="mb-6 flex justify-between items-center">
                 <div>
-                  <h1 className="text-2xl font-bold mb-1">Complete Your Order</h1>
-                  <p className="text-gray-500 text-sm">Select delivery method and location</p>
+                  <h1 className="text-2xl font-bold mb-1">Step 3: Complete Test Checkout</h1>
+                  <p className="text-gray-500 text-sm">Finalize fulfillment to finish onboarding and enter dashboard</p>
                 </div>
                 <div className="flex items-center space-x-2 text-sm text-gray-500">
                   <span className="flex items-center">
@@ -746,6 +757,24 @@ const Checkout = () => {
                     <span className="w-6 h-6 rounded-full bg-printa-red text-white flex items-center justify-center mr-2">3</span>
                     Checkout
                   </span>
+                </div>
+              </div>
+
+              <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4">
+                <p className="text-[11px] uppercase tracking-wide text-printa-red font-semibold mb-2">Go-Live Readiness</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
+                  <p className={onboardingSnapshot.businessProfileDone ? "text-green-700" : "text-gray-500"}>
+                    {onboardingSnapshot.businessProfileDone ? "Done" : "Pending"}: Profile
+                  </p>
+                  <p className={onboardingSnapshot.servicesDone ? "text-green-700" : "text-gray-500"}>
+                    {onboardingSnapshot.servicesDone ? "Done" : "Pending"}: Services
+                  </p>
+                  <p className={onboardingSnapshot.pricingDone ? "text-green-700" : "text-gray-500"}>
+                    {onboardingSnapshot.pricingDone ? "Done" : "Pending"}: Pricing
+                  </p>
+                  <p className={onboardingSnapshot.teamSecurityDone ? "text-green-700" : "text-gray-500"}>
+                    {onboardingSnapshot.teamSecurityDone ? "Done" : "Pending"}: Team PIN
+                  </p>
                 </div>
               </div>
 
@@ -917,3 +946,5 @@ const Checkout = () => {
 };
 
 export default Checkout;
+
+

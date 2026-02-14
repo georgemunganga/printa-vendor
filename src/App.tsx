@@ -33,6 +33,7 @@ import Chat from "./pages/dashboard/Chat";
 import DashboardV2 from "./pages/dashboard/DashboardV2";
 import POSPage from "./pages/pos/POSPage";
 import ShiftManagement from "./pages/dashboard/ShiftManagement";
+import Stores from "./pages/dashboard/Stores";
 import { JobProvider } from "@/context/job-context";
 
 const PRELOADER_MIN_VISIBLE_MS = 500;
@@ -90,6 +91,7 @@ const App = () => {
                   <Route path="/" element={<PrintFlow />} />
                   <Route path="/customize" element={<Customize />} />
                   <Route path="/checkout" element={<Checkout />} />
+                  <Route path="/upload" element={<Upload />} />
                   <Route path="/dashboard" element={<DashboardV2 />} />
                   <Route path="/dashboard-old" element={<Dashboard />} />
                   <Route path="/dashboard/job-feed" element={<Navigate to="/dashboard/orders" replace />} />
@@ -108,8 +110,8 @@ const App = () => {
                   <Route path="/dashboard/chat/:orderId" element={<Chat />} />
                   <Route path="/dashboard/pos" element={<POSPage />} />
                   <Route path="/dashboard/shift-management" element={<ShiftManagement />} />
+                  <Route path="/dashboard/stores" element={<Stores />} />
                   <Route path="/how-it-works" element={<HowItWorks />} />
-                  <Route path="/upload" element={<Upload />} />
                   <Route path="/pricing" element={<Pricing />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/signup" element={<SignUp />} />

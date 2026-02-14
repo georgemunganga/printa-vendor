@@ -128,6 +128,7 @@ export const OrderSummary: React.FC<OrderSummaryProps> = ({
       <div className="bg-white rounded-t-2xl shadow-md overflow-hidden">
         <div className="p-4 py-0 sm:p-6 border-b border-gray-100">
           <h2 className="text-xl font-bold">Order Summary</h2>
+          <p className="text-xs text-gray-500 mt-1">Onboarding test order: verify your vendor workflow end to end.</p>
         </div>
 
         <div className="p-4 sm:p-6">

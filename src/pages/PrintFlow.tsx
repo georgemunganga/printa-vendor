@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/Navbar';
+import { getVendorOnboardingState } from '@/lib/vendorOnboardingState';
 
 type TabType = 'projects' | 'templates' | 'upload';
 
@@ -56,6 +57,7 @@ const PrintFlow = () => {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [visibleCount, setVisibleCount] = useState(12);
+  const [onboardingState, setOnboardingState] = useState(getVendorOnboardingState());
   const navigate = useNavigate();
 
   const tabs = [
@@ -848,6 +850,13 @@ const PrintFlow = () => {
     setVisibleCount(prev => Math.min(prev, filteredCategories.length));
   }, [filteredCategories.length]);
 
+  useEffect(() => {
+    const sync = () => setOnboardingState(getVendorOnboardingState());
+    sync();
+    window.addEventListener('focus', sync);
+    return () => window.removeEventListener('focus', sync);
+  }, []);
+
   const visibleCategories = filteredCategories.slice(0, visibleCount);
   const canLoadMore = visibleCount < filteredCategories.length;
   const handleLoadMore = () => {
@@ -894,7 +903,7 @@ const PrintFlow = () => {
             className="text-center mb-8 mt-8"
           >
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold printa-black">
-              What are you <span className="text-printa-red">printing </span>today?
+             Increase your  <span className="text-printa-red">Sales </span>
             </h1>
             {/* <p className="mt-4 text-gray-600 text-lg max-w-2xl mx-auto">
               Professional printing made simple. Upload, customize, and print anywhere.
@@ -902,27 +911,7 @@ const PrintFlow = () => {
           </motion.div>
 
           {/* Tab Navigation */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="flex justify-center gap-2 mb-8"
-          >
-            {tabs.map((tab) => (
-              <Button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
-                  activeTab === tab.id
-                    ? 'bg-printa-black text-white shadow-md'
-                    : 'bg-white/70 text-foreground hover:bg-white border border-gray-200'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-              </Button>
-            ))}
-          </motion.div>
+         
 
           {/* Central Search Module */}
           <motion.div
@@ -1117,8 +1106,8 @@ const PrintFlow = () => {
                   <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center mb-4">
                     <Upload className="w-6 h-6 text-printa-red" />
                   </div>
-                  <h3 className="font-semibold text-lg mb-2 text-white">Upload & Print</h3>
-                  <p className="text-sm text-gray-200">Upload your files and get them printed at a location near you</p>
+                  <h3 className="font-semibold text-lg mb-2 text-white">Step 1: Upload Files</h3>
+                  <p className="text-sm text-gray-200">Start onboarding by uploading a sample job like a customer would.</p>
                 </div>
               </Link>
             </motion.div>
@@ -1136,8 +1125,8 @@ const PrintFlow = () => {
                   <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center mb-4">
                     <Sparkles className="w-6 h-6 text-printa-red" />
                   </div>
-                  <h3 className="font-semibold text-lg mb-2 text-white">Design Assistant</h3>
-                  <p className="text-sm text-gray-200">Let our tools help you create the perfect design for printing</p>
+                  <h3 className="font-semibold text-lg mb-2 text-white">Step 2: Configure Job</h3>
+                  <p className="text-sm text-gray-200">Select print specs to understand your live order workflow.</p>
                 </div>
               </Link>
             </motion.div>
@@ -1155,11 +1144,28 @@ const PrintFlow = () => {
                   <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center mb-4">
                     <Printer className="w-6 h-6 text-printa-red" />
                   </div>
-                  <h3 className="font-semibold text-lg mb-2 text-white">How It Works</h3>
-                  <p className="text-sm text-gray-200">Learn how to print anywhere with Printa's network</p>
+                  <h3 className="font-semibold text-lg mb-2 text-white">Step 3: Checkout Flow</h3>
+                  <p className="text-sm text-gray-200">Complete fulfillment and summary, then continue to dashboard.</p>
                 </div>
               </Link>
             </motion.div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-10 bg-white">
+        <div className="container mx-auto px-4 max-w-6xl">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Vendor Onboarding Plan</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700">
+              <p className={onboardingState.businessProfileDone ? 'text-green-700' : ''}>1. Vendor profile setup</p>
+              <p className={onboardingState.servicesDone ? 'text-green-700' : ''}>2. Services setup</p>
+              <p className={onboardingState.pricingDone ? 'text-green-700' : ''}>3. Pricing setup</p>
+              <p className={onboardingState.fulfillmentDone ? 'text-green-700' : ''}>4. Fulfillment setup</p>
+              <p className={onboardingState.teamSecurityDone ? 'text-green-700' : ''}>5. Team and security (PIN)</p>
+              <p className={onboardingState.specsCompleted ? 'text-green-700' : ''}>6. Test order walkthrough (Upload -&gt; Customize -&gt; Checkout)</p>
+              <p className={onboardingState.testOrderCompleted ? 'text-green-700' : ''}>7. Go-live checklist validation</p>
+            </div>
           </div>
         </div>
       </section>
@@ -1171,3 +1177,5 @@ const PrintFlow = () => {
 };
 
 export default PrintFlow;
+
+

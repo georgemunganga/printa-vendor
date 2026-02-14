@@ -12,6 +12,7 @@ import {
   Printer,
   Settings,
   ShieldCheck,
+  Store,
   User,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
@@ -26,6 +27,7 @@ const mainNavItems = [
 ];
 
 const secondaryNavItems = [
+  { icon: Store, name: "Stores", path: "/dashboard/stores" },
   { icon: User, name: "Profile", path: "/dashboard/profile" },
   { icon: Settings, name: "Settings", path: "/dashboard/settings" },
   { icon: HelpCircle, name: "Support", path: "/dashboard/support" },
