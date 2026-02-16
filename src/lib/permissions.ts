@@ -12,7 +12,6 @@ import {
   Users,
   CreditCard,
   Bell,
-  Package,
 } from "lucide-react";
 
 export interface AccessUser {
@@ -124,13 +123,6 @@ export const SECONDARY_NAV_ITEMS: NavItem[] = [
     path: "/dashboard/team",
     requiredPermissions: ["view_team", "manage_team"],
     requiresAny: true,
-  },
-  {
-    icon: Package,
-    name: "Inventory",
-    path: "/dashboard/inventory",
-    requiredPermissions: ["manage_inventory"],
-    requiresStore: true,
   },
   {
     icon: CreditCard,

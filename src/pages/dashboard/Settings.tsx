@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Bell, Lock, Shield, DollarSign, Smartphone, Check, LogOut, Store } from "lucide-react";
+import { Bell, Lock, Shield, DollarSign, Smartphone, Check, LogOut, Store, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -121,6 +121,33 @@ const SettingsPage = () => {
               </Button>
             </div>
           ))}
+
+          {/* Inventory link */}
+          <div
+            className="flex flex-col rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:border-gray-300 transition-colors"
+            onClick={() => navigate("/dashboard/inventory")}
+          >
+            <div className="flex items-center gap-4">
+              <div className="rounded-2xl p-3 bg-printa-red/10 text-printa-red">
+                <Package size={18} className="text-printa-red" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Inventory</p>
+                <p className="text-sm text-gray-500">Manage your stock, paper, ink, and supplies.</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              className="text-sm font-semibold text-printa-red"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate("/dashboard/inventory");
+              }}
+            >
+              Manage
+            </Button>
+          </div>
+
           <div
               
               className={`flex flex-col rounded-2xl border p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between bg-printa-red text-white border-0"
