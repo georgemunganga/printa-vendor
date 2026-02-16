@@ -46,7 +46,7 @@ interface AuthContextValue {
 }
 
 const REFRESH_POLL_INTERVAL_MS = 30 * 1000;
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "missing-google-client-id";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -227,6 +227,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }),
     [user, isAuthenticated, setActiveStoreScopeHandler, activeStoreScope]
   );
+
+  if (!GOOGLE_CLIENT_ID) {
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  }
 
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
