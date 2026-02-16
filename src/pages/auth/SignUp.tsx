@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
+import { useGoogleLogin } from "@react-oauth/google";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from "sonner";
@@ -11,6 +12,14 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { useAuth } from "@/context/auth-context";
+import {
+  clearOnboardingComplete,
+  clearOnboardingState,
+  isOnboardingComplete,
+} from "@/lib/vendorOnboardingState";
+import { requestSignupOtp, verifySignupOtp } from "@/mock-api/auth";
+import { fetchGoogleUserProfile } from "@/lib/google-auth";
 
 const countryCodes = [
   { code: '+260', country: 'Zambia', flag: '🇿🇲' },
@@ -104,13 +113,22 @@ const GoogleIcon = () => (
 
 const SignUp = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [step, setStep] = useState<'info' | 'otp'>('info');
   const [name, setName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
   const [otp, setOtp] = useState('');
+  const [challengeId, setChallengeId] = useState("");
   const [countryCode, setCountryCode] = useState(countryCodes[0]);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOnboardingComplete()) {
+      navigate("/onboarding", { replace: true });
+    }
+  }, [navigate]);
 
   const handleSendOTP = (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,8 +150,20 @@ const SignUp = () => {
       }
     }
 
-    toast.success(`OTP sent to your ${loginMethod === 'phone' ? 'phone number' : 'email address'}`);
-    setStep('otp');
+    try {
+      const value = loginMethod === "phone" ? `${countryCode.code}${phoneNumber}` : email;
+      const { challengeId: nextChallenge } = requestSignupOtp({
+        name: name.trim(),
+        method: loginMethod,
+        value,
+      });
+      setChallengeId(nextChallenge);
+      toast.success(`OTP sent to your ${loginMethod === 'phone' ? 'phone number' : 'email address'}`);
+      setStep('otp');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to send OTP";
+      toast.error(message);
+    }
   };
 
   const contactLabel = loginMethod === 'phone' ? `${countryCode.code} ${phoneNumber}` : email;
@@ -146,13 +176,61 @@ const SignUp = () => {
       return;
     }
 
-    toast.success("Account created successfully!");
-    setTimeout(() => navigate('/dashboard'), 1000);
+    if (!challengeId) {
+      toast.error("Sign up session expired. Please request OTP again.");
+      setStep("info");
+      return;
+    }
+
+    try {
+      const user = verifySignupOtp(challengeId, otp);
+      login(user);
+      clearOnboardingState();
+      clearOnboardingComplete();
+      toast.success("Account created successfully!");
+      setTimeout(() => navigate('/dashboard/stores'), 700);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "OTP verification failed";
+      toast.error(message);
+    }
   };
 
+  const googleSignUp = useGoogleLogin({
+    scope: "openid email profile",
+    onSuccess: (tokenResponse) => {
+      void (async () => {
+        try {
+          const profile = await fetchGoogleUserProfile(tokenResponse.access_token);
+          const { challengeId: nextChallenge } = requestSignupOtp({
+            name: profile.name,
+            method: "email",
+            value: profile.email,
+          });
+          toast.success("Google account linked. Verify OTP to continue.");
+          navigate(
+            `/otp?purpose=signup&challenge=${encodeURIComponent(nextChallenge)}&method=email&value=${encodeURIComponent(profile.email)}`
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unable to start Google sign-up";
+          toast.error(message);
+        } finally {
+          setIsGoogleLoading(false);
+        }
+      })();
+    },
+    onError: () => {
+      setIsGoogleLoading(false);
+      toast.error("Google authentication failed.");
+    },
+  });
+
   const handleGoogleSignUp = () => {
-    toast.success("Signing up with Google...");
-    setTimeout(() => navigate('/dashboard'), 1000);
+    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+      toast.error("Google auth is not configured. Set VITE_GOOGLE_CLIENT_ID.");
+      return;
+    }
+    setIsGoogleLoading(true);
+    googleSignUp();
   };
 
   return (
@@ -168,10 +246,11 @@ const SignUp = () => {
           <button
             type="button"
             onClick={handleGoogleSignUp}
+            disabled={isGoogleLoading}
             className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all"
           >
             <GoogleIcon />
-            Continue with Google
+            {isGoogleLoading ? "Connecting..." : "Continue with Google"}
           </button>
 
           {/* Divider */}
@@ -190,7 +269,7 @@ const SignUp = () => {
               <button
                 type="button"
                 onClick={() => setLoginMethod('phone')}
-                className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition ${
                   loginMethod === 'phone' ? 'bg-printa-red text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -202,7 +281,7 @@ const SignUp = () => {
               <button
                 type="button"
                 onClick={() => setLoginMethod('email')}
-                className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition ${
                   loginMethod === 'email' ? 'bg-printa-red text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -296,13 +375,13 @@ const SignUp = () => {
             <p className="text-sm text-gray-500">
               Enter the 6-digit code sent to <span className="font-semibold text-gray-900">{contactLabel}</span>
             </p>
-            <button
+            <Button
               type="button"
               className="text-printa-red text-sm mt-1 hover:underline font-medium"
               onClick={() => setStep('info')}
             >
               Change {loginMethod === 'phone' ? 'number' : 'email'}
-            </button>
+            </Button>
           </div>
 
           <form onSubmit={handleVerifyOTP}>

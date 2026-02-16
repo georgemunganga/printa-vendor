@@ -5,6 +5,8 @@ import { PanelLeft } from "lucide-react";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import { BackButton } from "@/components/dashboard/BackButton";
+import { useAuth } from "@/context/auth-context";
+import { useStore } from "@/context/store-context";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -20,12 +22,18 @@ const PRIMARY_TABS = [
   "/dashboard/pos",
   "/dashboard/shift-management",
   "/dashboard/stores",
+  "/dashboard/subscription",
+  "/dashboard/team",
+  "/dashboard/notifications",
+  "/dashboard/support",
 ];
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, pageTitle, hideMobileBottomNav = false }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useAuth();
+  const { setActiveStore } = useStore();
 
   const normalizedPath = useMemo(() => location.pathname.replace(/\/$/, ""), [location.pathname]);
   const isPrimaryRoute = PRIMARY_TABS.includes(normalizedPath);
@@ -35,8 +43,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, page
   const mainPaddingBottom = showBottomNav ? "pb-28" : "pb-8 md:pb-10";
 
   const handleLogout = () => {
+    logout();
     toast.success("Logged out successfully");
-    setTimeout(() => navigate("/login"), 800);
+    navigate("/login", { replace: true });
   };
 
   const handleStackBack = () => {
@@ -47,11 +56,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, page
     navigate("/dashboard", { replace: true });
   };
 
+  const handleStoreSignOut = () => {
+    setActiveStore(null);
+    navigate("/dashboard/stores", { replace: true });
+    toast.success("Signed out of store");
+  };
+
   return (
     <div className="min-h-screen flex bg-gray-50 overflow-x-hidden">
       <DashboardSidebar
         isOpen={isSidebarOpen}
         onLogout={handleLogout}
+        onStoreSignOut={handleStoreSignOut}
         toggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
       />
       <div

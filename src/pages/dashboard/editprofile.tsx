@@ -107,7 +107,7 @@ const EditProfilePage = () => {
                 Cancel
               </button>
             )}
-            <button
+            <Button
               type="button"
               onClick={handleSave}
               disabled={isSaving}
@@ -118,7 +118,7 @@ const EditProfilePage = () => {
               }`}
             >
               {isSaving ? "Saving..." : isEditing ? "Save" : "Edit"}
-            </button>
+            </Button>
           </div>
         </div>
 

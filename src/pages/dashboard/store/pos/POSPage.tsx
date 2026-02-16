@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BookOpen,
@@ -22,6 +22,8 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { POSOrderSummary, POSRightOrderPanel } from "@/components/dashboard/pos/POSRightOrderPanel";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useStore } from "@/context/store-context";
+import { hashString } from "@/lib/store-scope";
 
 interface ServiceCategory {
   id: string;
@@ -125,21 +127,43 @@ const services: ServiceItem[] = [
 const TAX_RATE = 0.16;
 
 const POSPage: React.FC = () => {
+  const { activeStore } = useStore();
   const [activeCategory, setActiveCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [order, setOrder] = useState<OrderLine[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "ewallet">("cash");
   const [showMobileOrder, setShowMobileOrder] = useState(false);
+  const priceMultiplier = useMemo(() => {
+    if (!activeStore?.id) return 1;
+    const step = hashString(activeStore.id) % 3; // 0,1,2
+    return 1 + step * 0.05;
+  }, [activeStore?.id]);
+
+  const servicesForStore = useMemo(
+    () =>
+      services.map((service) => ({
+        ...service,
+        price: Number((service.price * priceMultiplier).toFixed(2)),
+      })),
+    [priceMultiplier]
+  );
+
+  useEffect(() => {
+    setOrder([]);
+    setSearch("");
+    setActiveCategory("all");
+    setShowMobileOrder(false);
+  }, [activeStore?.id]);
 
   const filtered = useMemo(() => {
-    let list = services;
+    let list = servicesForStore;
     if (activeCategory !== "all") list = list.filter((s) => s.categoryId === activeCategory);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((s) => s.name.toLowerCase().includes(q));
     }
     return list;
-  }, [activeCategory, search]);
+  }, [servicesForStore, activeCategory, search]);
 
   const catMap = useMemo(() => {
     const m: Record<string, ServiceCategory> = {};
@@ -187,13 +211,13 @@ const POSPage: React.FC = () => {
       {showMobileOrder && (
         <div className="fixed inset-0 z-50 bg-gray-50 lg:hidden flex flex-col">
           <div className="flex items-center gap-3 px-4 pt-4 pb-2">
-            <button
+            <Button
               type="button"
               onClick={() => setShowMobileOrder(false)}
               className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center"
             >
               <X size={18} className="text-gray-600" />
-            </button>
+            </Button>
             <h2 className="text-lg font-bold text-gray-900">Order</h2>
           </div>
           <div className="flex-1 overflow-y-auto bg-white rounded-t-2xl mt-2">
@@ -224,7 +248,9 @@ const POSPage: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="dashboard-page-title">Point of Sale</h1>
-              <p className="text-xs text-gray-400 mt-0.5">Select services & products for walk-in orders</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {activeStore?.name ?? "Store"} · Select services & products for walk-in orders
+              </p>
             </div>
           </div>
 
@@ -292,7 +318,7 @@ const POSPage: React.FC = () => {
                           K{svc.price.toFixed(2)}
                         </p>
                       </div>
-                      <div className={`w-12 h-12 rounded-lg  flex items-center justify-center flex-shrink-0`}>
+                      <div className={`w-12 h-12 rounded-xl  flex items-center justify-center flex-shrink-0`}>
                         <Icon size={26} className={`transition-colors duration-200 ${inOrder ? "text-white" : `group-hover:text-white ${cat?.color ?? "text-gray-500"}`}`} />
                       </div>
                     </div>
@@ -304,7 +330,7 @@ const POSPage: React.FC = () => {
                           e.stopPropagation();
                           if (qty > 0) updateQty(svc.id, -1);
                         }}
-                        className={`h-7 w-7 rounded-lg flex items-center justify-center transition-colors duration-200 disabled:opacity-40 ${
+                        className={`h-7 w-7 rounded-xl flex items-center justify-center transition-colors duration-200 disabled:opacity-40 ${
                           inOrder
                             ? "border border-white/40 bg-white/10 text-white hover:bg-white/20"
                             : "border border-gray-300 bg-white text-gray-600 group-hover:border-white/40 group-hover:bg-white/10 group-hover:text-white"
@@ -322,10 +348,10 @@ const POSPage: React.FC = () => {
                           e.stopPropagation();
                           addToOrder(svc);
                         }}
-                        className={`h-7 w-7 rounded-lg flex items-center justify-center transition-colors duration-200 ${
+                        className={`h-7 w-7 rounded-xl flex items-center justify-center transition-colors duration-200 ${
                           inOrder
                             ? "border border-white/40 bg-white/10 text-white hover:bg-white/20"
-                            : "border border-gray-300 bg-white text-gray-600 group-hover: /40 group-hover:bg-white/10 group-hover:text-white"
+                            : "border border-gray-300 bg-white text-gray-600 group-hover:border-white/40 group-hover:bg-white/10 group-hover:text-white"
                         }`}
                       >
                         <Plus size={12} />
@@ -374,13 +400,13 @@ const POSPage: React.FC = () => {
               <ShoppingCart size={16} />
               Proceed to Order ({itemCount})
             </Button>
-             <button
+             <Button
               type="button"
               onClick={clearOrder}
               className="h-11 px-4 rounded-xl border border-gray-300 text-gray-700 text-sm font-semibold"
             >
               Clear
-            </button>
+            </Button>
           </div>
         </div>
       )}

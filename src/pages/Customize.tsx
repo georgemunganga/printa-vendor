@@ -197,7 +197,7 @@ const Customize = () => {
                         key={svc}
                         type="button"
                         onClick={() => setEnabledServices((prev) => active ? prev.filter((p) => p !== svc) : [...prev, svc])}
-                        className={`px-3 py-1.5 rounded-lg text-xs border transition ${active ? 'bg-printa-red text-white border-printa-red' : 'bg-white text-gray-700 border-gray-300'}`}
+                        className={`px-3 py-1.5 rounded-xl text-xs border transition ${active ? 'bg-printa-red text-white border-printa-red' : 'bg-white text-gray-700 border-gray-300'}`}
                       >
                         {svc}
                       </button>
@@ -213,7 +213,7 @@ const Customize = () => {
                       key={m}
                       type="button"
                       onClick={() => setFulfillmentMode(m)}
-                      className={`px-3 py-1.5 rounded-lg text-xs border transition ${fulfillmentMode === m ? 'bg-printa-red text-white border-printa-red' : 'bg-white text-gray-700 border-gray-300'}`}
+                      className={`px-3 py-1.5 rounded-xl text-xs border transition ${fulfillmentMode === m ? 'bg-printa-red text-white border-printa-red' : 'bg-white text-gray-700 border-gray-300'}`}
                     >
                       {m}
                     </button>

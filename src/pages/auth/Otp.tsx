@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/auth-context";
 import { toast } from "sonner";
 import { AuthLayout } from "@/components/auth/AuthLayout";
+import { resendLoginOtp, resendSignupOtp, verifyLoginOtp, verifySignupOtp } from "@/mock-api/auth";
+import { clearOnboardingComplete, clearOnboardingState } from "@/lib/vendorOnboardingState";
 
 const INPUT_LENGTH = 6;
 
@@ -14,14 +16,25 @@ const OTPVerificationPage = () => {
   const [searchParams] = useSearchParams();
   const method = searchParams.get("method") ?? "phone";
   const value = searchParams.get("value") ?? "";
-  const name = searchParams.get("name") ?? "User";
+  const challengeId = searchParams.get("challenge") ?? "";
+  const purpose = searchParams.get("purpose") ?? "login";
   const { login } = useAuth();
+  const isLoginFlow = purpose === "login";
+  const isSignupFlow = purpose === "signup";
 
   const [otp, setOtp] = useState(Array(INPUT_LENGTH).fill(""));
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  useEffect(() => {
+    if ((!isLoginFlow && !isSignupFlow) || !challengeId) {
+      toast.error("Invalid OTP session. Please login again.");
+      navigate("/login", { replace: true });
+      return;
+    }
+  }, [challengeId, isLoginFlow, isSignupFlow, navigate]);
 
   useEffect(() => {
     if (timer === 0) {
@@ -63,25 +76,45 @@ const OTPVerificationPage = () => {
 
     setIsVerifying(true);
     setTimeout(() => {
-      login({
-        id: Date.now().toString(),
-        name,
-        phone: method === "phone" ? value : undefined,
-        email: method === "email" ? value : undefined,
-        memberSince: "January 2024",
-      });
-      setIsVerifying(false);
-      toast.success("OTP verified");
-      navigate("/dashboard");
+      try {
+        const user = isLoginFlow
+          ? verifyLoginOtp(challengeId, code)
+          : verifySignupOtp(challengeId, code);
+        login(user);
+        if (isSignupFlow) {
+          clearOnboardingState();
+          clearOnboardingComplete();
+        }
+        setIsVerifying(false);
+        toast.success("OTP verified");
+        navigate("/dashboard/stores");
+      } catch (error) {
+        setIsVerifying(false);
+        const message = error instanceof Error ? error.message : "OTP verification failed";
+        toast.error(message);
+      }
     }, 700);
   };
 
   const handleResend = () => {
-    setTimer(30);
-    setCanResend(false);
-    setOtp(Array(INPUT_LENGTH).fill(""));
-    inputRefs.current[0]?.focus();
-    toast.success("OTP sent again");
+    try {
+      const { challengeId: nextChallenge } = isLoginFlow
+        ? resendLoginOtp(challengeId)
+        : resendSignupOtp(challengeId);
+      setTimer(30);
+      setCanResend(false);
+      setOtp(Array(INPUT_LENGTH).fill(""));
+      inputRefs.current[0]?.focus();
+      toast.success("OTP sent again");
+      navigate(
+        `/otp?purpose=${encodeURIComponent(purpose)}&challenge=${encodeURIComponent(nextChallenge)}&method=${encodeURIComponent(method)}&value=${encodeURIComponent(value)}`,
+        { replace: true }
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to resend OTP";
+      toast.error(message);
+      navigate(isSignupFlow ? "/signup" : "/login", { replace: true });
+    }
   };
 
   return (

@@ -2,51 +2,44 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation } from "react-router-dom";
 import {
-  FileText,
-  HelpCircle,
-  Home,
   LogOut,
-  MessageCircle,
+  LogIn,
   PanelLeft,
   PanelLeftClose,
-  Printer,
-  Settings,
-  ShieldCheck,
-  Store,
-  User,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
+import { useStore } from "@/context/store-context";
 import { Button } from "@/components/ui/button";
-
-const mainNavItems = [
-  { icon: Home, name: "Dashboard", path: "/dashboard" },
-  { icon: Printer, name: "POS", path: "/dashboard/pos" },
-  { icon: ShieldCheck, name: "Shift", path: "/dashboard/shift-management" },
-  { icon: FileText, name: "Orders", path: "/dashboard/orders" },
-  { icon: MessageCircle, name: "Messages", path: "/dashboard/chat" },
-];
-
-const secondaryNavItems = [
-  { icon: Store, name: "Stores", path: "/dashboard/stores" },
-  { icon: User, name: "Profile", path: "/dashboard/profile" },
-  { icon: Settings, name: "Settings", path: "/dashboard/settings" },
-  { icon: HelpCircle, name: "Support", path: "/dashboard/support" },
-];
+import { getNavItemsForUser } from "@/lib/permissions";
+import { isRootScopePath } from "@/lib/route-scope";
 
 interface DashboardSidebarProps {
   isOpen: boolean;
   onLogout: () => void;
+  onStoreSignOut: () => void;
   toggleSidebar: () => void;
 }
 
 export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   isOpen,
   onLogout,
+  onStoreSignOut,
   toggleSidebar,
 }) => {
   const location = useLocation();
   const { user } = useAuth();
+  const { isStoreSelected } = useStore();
   const [isHovered, setIsHovered] = useState(false);
+  const isRootRoute = isRootScopePath(location.pathname);
+  const shouldShowStoreNav = isStoreSelected && !isRootRoute;
+
+  const nav = getNavItemsForUser(user);
+  const visibleMainNav = shouldShowStoreNav
+    ? nav.main.filter((item) => item.requiresStore)
+    : [];
+  const visibleSecondaryNav = shouldShowStoreNav
+    ? nav.secondary.filter((item) => item.requiresStore)
+    : nav.secondary.filter((item) => !item.requiresStore);
 
   const isActive = (path: string) => {
     if (path === "/dashboard") {
@@ -126,7 +119,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         <div className="space-y-1">
-          {mainNavItems.map((item) => {
+          {visibleMainNav.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.path);
             return (
@@ -147,33 +140,49 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           })}
         </div>
 
-        <div className={`my-4 border-t border-white/20 ${!isOpen ? "mx-2" : ""}`} />
+        {visibleSecondaryNav.length > 0 && (
+          <>
+            <div className={`my-4 border-t border-white/20 ${!isOpen ? "mx-2" : ""}`} />
 
-        <div className="space-y-1">
-          {secondaryNavItems.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.path);
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                title={item.name}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  active
-                    ? "bg-printa-black text-white"
-                    : "text-white hover:bg-gray-50 hover:text-gray-700"
-                } ${!isOpen ? "justify-center px-0" : ""}`}
-              >
-                <Icon size={18} strokeWidth={active ? 2 : 1.5} />
-                {isOpen && <span>{item.name}</span>}
-              </Link>
-            );
-          })}
-        </div>
+            <div className="space-y-1">
+              {visibleSecondaryNav.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.path);
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.path}
+                    title={item.name}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                      active
+                        ? "bg-printa-black text-white"
+                        : "text-white hover:bg-gray-50 hover:text-gray-700"
+                    } ${!isOpen ? "justify-center px-0" : ""}`}
+                  >
+                    <Icon size={18} strokeWidth={active ? 2 : 1.5} />
+                    {isOpen && <span>{item.name}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </>
+        )}
       </nav>
 
       {/* Profile + Logout */}
       <div className="border-t border-white/20 p-3 flex-shrink-0">
+        {isStoreSelected && (
+          <button
+            onClick={onStoreSignOut}
+            title="Sign out of store"
+            className={`mb-2 flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-white hover:bg-white hover:text-gray-900 transition-all ${
+              !isOpen ? "justify-center px-0" : ""
+            }`}
+          >
+            <LogIn size={16} />
+            {isOpen && <span>Sign Out of Store</span>}
+          </button>
+        )}
       
         {isOpen ? (
           <Link

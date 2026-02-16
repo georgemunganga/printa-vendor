@@ -1,229 +1,167 @@
-import React, { useState } from "react";
-import {
-  BookOpen,
-  Camera,
-  Car,
-  CreditCard,
-  Edit3,
-  FileText,
-  Flag,
-  Gift,
-  MapPin,
-  Minus,
-  Newspaper,
-  Package,
-  Plus,
-  Shirt,
-  Store,
-  Tag,
-  Trash2,
-  Users,
-} from "lucide-react";
-import { toast } from "sonner";
+import React, { useMemo, useState } from "react";
+import { Edit3, LogIn, MapPin, Plus, Store, Trash2, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useStore } from "@/context/store-context";
+import { useAuth } from "@/context/auth-context";
+import type { Store as StoreType } from "@/types";
+import { createStore, deleteStore, updateStore } from "@/mock-api/stores";
 
-/* ─── Shared data (categories + employees) ─── */
-
-interface ServiceCategory {
-  id: string;
-  name: string;
-  icon: React.ElementType;
-  color: string;
-  bg: string;
-}
-
-const serviceCategories: ServiceCategory[] = [
-  { id: "s1", name: "Paper Printing", icon: FileText, color: "text-red-600", bg: "bg-red-50" },
-  { id: "s2", name: "Cards & Stationery", icon: CreditCard, color: "text-blue-600", bg: "bg-blue-50" },
-  { id: "s3", name: "Periodicals", icon: Newspaper, color: "text-purple-600", bg: "bg-purple-50" },
-  { id: "s4", name: "Books & Binding", icon: BookOpen, color: "text-amber-600", bg: "bg-amber-50" },
-  { id: "s5", name: "Apparel & Fabric", icon: Shirt, color: "text-green-600", bg: "bg-green-50" },
-  { id: "s6", name: "Promotional Items", icon: Gift, color: "text-pink-600", bg: "bg-pink-50" },
-  { id: "s7", name: "Large Format", icon: Flag, color: "text-orange-600", bg: "bg-orange-50" },
-  { id: "s8", name: "Stickers & Labels", icon: Tag, color: "text-teal-600", bg: "bg-teal-50" },
-  { id: "s9", name: "Vinyl & Wraps", icon: Car, color: "text-indigo-600", bg: "bg-indigo-50" },
-  { id: "s10", name: "Packaging", icon: Package, color: "text-rose-600", bg: "bg-rose-50" },
-  { id: "s11", name: "Photo Printing", icon: Camera, color: "text-cyan-600", bg: "bg-cyan-50" },
-];
-
-interface Employee {
-  id: string;
-  name: string;
-  role: string;
-  avatar: string;
-}
-
-const employees: Employee[] = [
-  { id: "me", name: "Myself (Owner)", role: "Owner", avatar: "ME" },
-  { id: "e1", name: "Leslie K.", role: "Cashier", avatar: "LK" },
-  { id: "e2", name: "Cameron W.", role: "Operator", avatar: "CW" },
-  { id: "e3", name: "Jacob J.", role: "Supervisor", avatar: "JJ" },
-];
-
-const avatarColors = [
-  "bg-rose-100 text-rose-600",
-  "bg-blue-100 text-blue-600",
-  "bg-amber-100 text-amber-600",
-  "bg-emerald-100 text-emerald-600",
-  "bg-purple-100 text-purple-600",
-];
-
-/* ─── Store type ─── */
-
-interface StoreData {
-  id: string;
+interface StoreFormState {
   name: string;
   address: string;
-  categoryIds: string[];
-  employeeIds: string[];
-  createdAt: Date;
+  phone: string;
+  email: string;
 }
 
-const INITIAL_STORES: StoreData[] = [
-  {
-    id: "store-1",
-    name: "Downtown Stationery",
-    address: "34 Kimathi St, Nairobi",
-    categoryIds: ["s1", "s2", "s4", "s8"],
-    employeeIds: ["me", "e1"],
-    createdAt: new Date("2025-11-15"),
-  },
-  {
-    id: "store-2",
-    name: "Westlands Print Hub",
-    address: "12 Waiyaki Way, Westlands",
-    categoryIds: ["s1", "s5", "s6", "s7", "s9", "s11"],
-    employeeIds: ["me", "e2", "e3"],
-    createdAt: new Date("2026-01-05"),
-  },
-];
-
-/* ─── Wizard form state ─── */
-
-interface WizardForm {
-  name: string;
-  address: string;
-  categoryIds: string[];
-  employeeIds: string[];
-}
-
-const emptyForm: WizardForm = {
+const emptyForm: StoreFormState = {
   name: "",
   address: "",
-  categoryIds: [],
-  employeeIds: ["me"],
+  phone: "",
+  email: "",
 };
 
-/* ─── Main Page ─── */
-
 const StoresPage: React.FC = () => {
-  const [stores, setStores] = useState<StoreData[]>(INITIAL_STORES);
-  const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const [editingStoreId, setEditingStoreId] = useState<string | null>(null);
-  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
-  const [form, setForm] = useState<WizardForm>(emptyForm);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const {
+    activeStore,
+    availableStores,
+    setActiveStore,
+    refreshStores,
+    isHydrating,
+  } = useStore();
 
-  const isEditing = editingStoreId !== null;
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingStore, setEditingStore] = useState<StoreType | null>(null);
+  const [form, setForm] = useState<StoreFormState>(emptyForm);
+  const [isSaving, setIsSaving] = useState(false);
+  const [switchingStoreId, setSwitchingStoreId] = useState<string | null>(null);
+  const [hoveredStoreId, setHoveredStoreId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [storeToDelete, setStoreToDelete] = useState<StoreType | null>(null);
 
-  const resetWizard = () => {
+  const stores = useMemo(() => availableStores, [availableStores]);
+
+  const openAddModal = () => {
+    setEditingStore(null);
     setForm(emptyForm);
-    setWizardStep(1);
-    setEditingStoreId(null);
+    setIsModalOpen(true);
   };
 
-  const openAddWizard = () => {
-    resetWizard();
-    setIsWizardOpen(true);
-  };
-
-  const openEditWizard = (store: StoreData) => {
+  const openEditModal = (store: StoreType) => {
+    setEditingStore(store);
     setForm({
       name: store.name,
       address: store.address,
-      categoryIds: [...store.categoryIds],
-      employeeIds: [...store.employeeIds],
+      phone: store.phone || "",
+      email: store.email || "",
     });
-    setEditingStoreId(store.id);
-    setWizardStep(1);
-    setIsWizardOpen(true);
+    setIsModalOpen(true);
   };
 
-  const handleWizardClose = (open: boolean) => {
+  const closeModal = (open: boolean) => {
     if (!open) {
-      setIsWizardOpen(false);
-      resetWizard();
+      setIsModalOpen(false);
+      setEditingStore(null);
+      setForm(emptyForm);
+      setIsSaving(false);
     }
   };
 
-  const handleSave = () => {
+  const handleOpenStore = async (store: StoreType) => {
+    setSwitchingStoreId(store.id);
+    toast.loading(`Switching to ${store.name}...`);
+
+    // Simulate switching delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    setActiveStore(store);
+    setSwitchingStoreId(null);
+    toast.dismiss();
+    toast.success(`Switched to ${store.name}`);
+    navigate("/dashboard");
+  };
+
+  const handleBackToRoot = () => {
+    setActiveStore(null);
+    toast.success("Returned to all stores");
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
     if (!form.name.trim() || !form.address.trim()) {
-      toast.error("Store name and address are required");
+      toast.error("Store name and address are required.");
       return;
     }
 
-    if (isEditing) {
-      setStores((prev) =>
-        prev.map((s) =>
-          s.id === editingStoreId
-            ? { ...s, name: form.name, address: form.address, categoryIds: form.categoryIds, employeeIds: form.employeeIds }
-            : s
-        )
-      );
-      toast.success("Store updated");
-    } else {
-      const newStore: StoreData = {
-        id: `store-${Date.now()}`,
-        name: form.name,
-        address: form.address,
-        categoryIds: form.categoryIds,
-        employeeIds: form.employeeIds,
-        createdAt: new Date(),
-      };
-      setStores((prev) => [...prev, newStore]);
-      toast.success("Store created");
+    setIsSaving(true);
+    try {
+      if (editingStore) {
+        await updateStore(editingStore.id, {
+          name: form.name,
+          address: form.address,
+          phone: form.phone,
+          email: form.email,
+        });
+        toast.success("Store updated.");
+      } else {
+        await createStore({
+          businessId: user.businessId,
+          name: form.name,
+          address: form.address,
+          phone: form.phone,
+          email: form.email,
+        });
+        toast.success("Store created.");
+      }
+      await refreshStores();
+      closeModal(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to save store.";
+      toast.error(message);
+      setIsSaving(false);
     }
-    setIsWizardOpen(false);
-    resetWizard();
   };
 
-  const handleDelete = (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this store?")) return;
-    setStores((prev) => prev.filter((s) => s.id !== id));
-    toast.success("Store deleted");
+  const handleDelete = (store: StoreType) => {
+    setStoreToDelete(store);
+    setDeleteDialogOpen(true);
   };
 
-  const toggleCategory = (catId: string) => {
-    setForm((prev) => ({
-      ...prev,
-      categoryIds: prev.categoryIds.includes(catId)
-        ? prev.categoryIds.filter((c) => c !== catId)
-        : [...prev.categoryIds, catId],
-    }));
-  };
+  const handleConfirmedDelete = async () => {
+    if (!storeToDelete) return;
 
-  const toggleEmployee = (empId: string) => {
-    setForm((prev) => ({
-      ...prev,
-      employeeIds: prev.employeeIds.includes(empId)
-        ? prev.employeeIds.filter((e) => e !== empId)
-        : [...prev.employeeIds, empId],
-    }));
-  };
-
-  const catMap = Object.fromEntries(serviceCategories.map((c) => [c.id, c]));
-
-  const canGoToStep2 = form.name.trim().length > 0 && form.address.trim().length > 0;
-
-  /* ─── Wizard step titles ─── */
-  const stepTitles: Record<number, string> = {
-    1: "Store Details",
-    2: "Services Offered",
-    3: "Assign Employees",
+    try {
+      await deleteStore(storeToDelete.id);
+      if (activeStore?.id === storeToDelete.id) {
+        setActiveStore(null);
+      }
+      await refreshStores();
+      toast.success("Store deleted.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to delete store.";
+      toast.error(message);
+    } finally {
+      setDeleteDialogOpen(false);
+      setStoreToDelete(null);
+    }
   };
 
   return (
@@ -231,100 +169,146 @@ const StoresPage: React.FC = () => {
       <div className="mb-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="dashboard-page-title">My Stores</h1>
+            <h1 className="dashboard-page-title">Hello <span className="text-printa-red">George</span></h1>
             <p className="text-xs text-gray-400 mt-0.5">
-              {stores.length} {stores.length === 1 ? "store" : "stores"} registered
+              {stores.length} {stores.length === 1 ? "store" : "stores"} available
             </p>
           </div>
           <button
             type="button"
             className="flex items-center gap-1.5 rounded-xl bg-printa-red px-3 py-2 md:px-4 text-xs md:text-sm font-semibold text-white shadow-sm transition active:scale-95"
-            onClick={openAddWizard}
+            onClick={openAddModal}
           >
             <Plus size={16} />
             <span className="hidden md:inline">Add Store</span>
           </button>
         </div>
+        {activeStore && (
+          <button
+            type="button"
+            onClick={handleBackToRoot}
+            className="mt-2 text-xs font-semibold text-printa-red hover:underline"
+          >
+            Back to all stores
+          </button>
+        )}
       </div>
 
-      {/* ── Store grid ── */}
-      {stores.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+      {isHydrating ? (
+        <div className="text-sm text-gray-500">Loading stores...</div>
+      ) : stores.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {stores.map((store, index) => {
-            const cats = store.categoryIds.map((id) => catMap[id]).filter(Boolean);
-            const visibleCats = cats.slice(0, 5);
-            const extraCats = cats.length - 5;
-            const empCount = store.employeeIds.length;
-
+            const isActive = activeStore?.id === store.id;
+            const isSwitching = switchingStoreId === store.id;
+            const isCardHovered = hoveredStoreId === store.id;
             return (
               <motion.div
                 key={store.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+                onHoverStart={() => setHoveredStoreId(store.id)}
+                onHoverEnd={() => setHoveredStoreId(null)}
+                onClick={() => !isSwitching && handleOpenStore(store)}
+                className={`group relative bg-gradient-to-br from-gray-50 to-white rounded-3xl border-2 overflow-hidden transition-all hover:shadow-sm cursor-pointer ${
+                  isActive ? "border-printa-red/60 shadow-red-100" : "border-gray-200"
+                }`}
               >
-                <div className="p-4 md:p-5">
-                  {/* Store icon + name */}
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="p-2.5 rounded-xl bg-printa-red text-white flex-shrink-0">
-                      <Store size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h2 className="text-sm md:text-base font-semibold text-gray-900 truncate">{store.name}</h2>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <MapPin size={11} className="text-gray-400 flex-shrink-0" />
-                        <p className="text-xs text-gray-500 truncate">{store.address}</p>
-                      </div>
+                {/* Corner Action Icons */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(store);
+                  }}
+                  className="absolute top-3 left-3 z-20 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm border border-gray-200 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:border-red-300"
+                  title="Delete store"
+                >
+                  <Trash2 size={14} className="text-gray-600 hover:text-red-600" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEditModal(store);
+                  }}
+                  className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm border border-gray-200 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:bg-blue-50 hover:border-blue-300"
+                  title="Edit store"
+                >
+                  <Edit3 size={14} className="text-gray-600 hover:text-blue-600" />
+                </button>
+
+                {/* Store Icon with Rotating Arrows */}
+                <div className="relative py-4 px-3 md:py-8 md:px-6">
+                  <div className="flex items-center justify-center">
+                    {/* Fixed container for icon + arrows */}
+                    <div className="relative w-28 h-28 md:w-44 md:h-44 flex items-center justify-center">
+                      {/* Rotating RefreshCw Icon - Absolutely positioned behind */}
+                      <motion.div
+                        initial={{ rotate: 0 }}
+                        animate={
+                          isSwitching
+                            ? { rotate: 360 }
+                            : isCardHovered
+                            ? { rotate: 45 }
+                            : { rotate: 0 }
+                        }
+                        transition={
+                          isSwitching
+                            ? { duration: 1, repeat: Infinity, ease: "linear" }
+                            : { duration: 0.3 }
+                        }
+                        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                      >
+                        <div className="[&_polyline]:scale-[0.2] [&_polyline]:origin-center">
+                          <RefreshCw
+                            className="text-gray-300 w-24 h-24 md:w-36 md:h-36"
+                            strokeWidth={0.5}
+                          />
+                        </div>
+                      </motion.div>
+
+                      {/* Center Icon */}
+                      <motion.div
+                        whileHover={{ scale: 1.05 }}
+                        className="relative z-10 w-14 h-14 md:w-24 md:h-24 rounded-full bg-printa-red shadow-lg shadow-red-200 flex items-center justify-center"
+                      >
+                        <Store className="text-white w-7 h-7 md:w-10 md:h-10" strokeWidth={1.5} />
+                      </motion.div>
                     </div>
                   </div>
 
-                  {/* Service category pills */}
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {visibleCats.map((cat) => {
-                      const Icon = cat.icon;
-                      return (
-                        <span
-                          key={cat.id}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${cat.bg} ${cat.color}`}
-                        >
-                          <Icon size={10} />
-                          {cat.name}
-                        </span>
-                      );
-                    })}
-                    {extraCats > 0 && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500">
-                        +{extraCats} more
-                      </span>
+                  {/* Store Name */}
+                  <div className="text-center mt-4">
+                    <h2 className="text-lg font-bold text-gray-900 truncate px-2">
+                      {store.name}
+                    </h2>
+                    <div className="flex items-center justify-center gap-1 mt-1">
+                      <MapPin size={12} className="text-gray-400 flex-shrink-0" />
+                      <p className="text-xs text-gray-500 truncate">{store.address}</p>
+                    </div>
+                    {isSwitching && (
+                      <motion.span
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full"
+                      >
+                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                        Switching...
+                      </motion.span>
+                    )}
+                    {isActive && !isSwitching && (
+                      <motion.span
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full"
+                      >
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                        Active
+                      </motion.span>
                     )}
                   </div>
-
-                  {/* Employee count */}
-                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                    <Users size={12} />
-                    <span>{empCount} {empCount === 1 ? "employee" : "employees"}</span>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex border-t border-gray-100 divide-x divide-gray-100">
-                  <button
-                    type="button"
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
-                    onClick={() => openEditWizard(store)}
-                  >
-                    <Edit3 size={14} />
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium text-rose-500 hover:bg-rose-50 transition-colors"
-                    onClick={() => handleDelete(store.id)}
-                  >
-                    <Trash2 size={14} />
-                    Delete
-                  </button>
                 </div>
               </motion.div>
             );
@@ -344,7 +328,7 @@ const StoresPage: React.FC = () => {
           <button
             type="button"
             className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-printa-red px-4 py-2.5 text-xs font-semibold text-white transition active:scale-95"
-            onClick={openAddWizard}
+            onClick={openAddModal}
           >
             <Plus size={14} />
             Add Store
@@ -352,155 +336,79 @@ const StoresPage: React.FC = () => {
         </motion.div>
       )}
 
-      {/* ── Setup Wizard Modal ── */}
       <ResponsiveModal
-        open={isWizardOpen}
-        onOpenChange={handleWizardClose}
-        title={
-          <span className="flex items-center gap-2">
-            <Store size={20} className="text-printa-red" />
-            {isEditing ? "Edit Store" : "New Store Setup"}
-          </span>
-        }
-        description={`Step ${wizardStep} of 3 — ${stepTitles[wizardStep]}`}
+        open={isModalOpen}
+        onOpenChange={closeModal}
+        title={editingStore ? "Edit Store" : "Create Store"}
       >
-        {/* Step indicator */}
-        <div className="flex items-center gap-2 mb-6">
-          {[1, 2, 3].map((step) => (
-            <div
-              key={step}
-              className={`flex-1 h-1.5 rounded-full transition-colors ${
-                step <= wizardStep ? "bg-printa-red" : "bg-gray-200"
-              }`}
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="store-name">Store Name</Label>
+            <Input
+              id="store-name"
+              value={form.name}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="Downtown Branch"
             />
-          ))}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="store-address">Address</Label>
+            <Input
+              id="store-address"
+              value={form.address}
+              onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
+              placeholder="123 Main Street, Lusaka"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="store-phone">Phone (optional)</Label>
+            <Input
+              id="store-phone"
+              value={form.phone}
+              onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+              placeholder="+260 97 1234567"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="store-email">Email (optional)</Label>
+            <Input
+              id="store-email"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+              placeholder="store@printa.com"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => closeModal(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleSave()} disabled={isSaving}>
+              {isSaving ? "Saving..." : editingStore ? "Save Changes" : "Create Store"}
+            </Button>
+          </div>
         </div>
-
-        {/* Step 1 — Store Details */}
-        {wizardStep === 1 && (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="store-name" className="text-sm font-medium">Store Name</Label>
-              <Input
-                id="store-name"
-                placeholder="e.g., Downtown Stationery"
-                value={form.name}
-                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                className="rounded-xl"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="store-address" className="text-sm font-medium">Address</Label>
-              <Input
-                id="store-address"
-                placeholder="e.g., 34 Kimathi St, Nairobi"
-                value={form.address}
-                onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
-                className="rounded-xl"
-              />
-            </div>
-            <div className="flex justify-end pt-2">
-              <Button
-                onClick={() => setWizardStep(2)}
-                disabled={!canGoToStep2}
-                className="rounded-xl"
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2 — Services */}
-        {wizardStep === 2 && (
-          <div className="space-y-4">
-            <p className="text-xs text-gray-500">Select the service categories this store offers</p>
-            <div className="grid grid-cols-2 gap-2">
-              {serviceCategories.map((cat) => {
-                const Icon = cat.icon;
-                const isSelected = form.categoryIds.includes(cat.id);
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => toggleCategory(cat.id)}
-                    className={`flex items-center gap-2.5 p-3 rounded-xl border transition-all text-left ${
-                      isSelected
-                        ? "border-printa-red bg-printa-red/5"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded-lg ${cat.bg} ${cat.color} flex items-center justify-center flex-shrink-0`}>
-                      <Icon size={14} />
-                    </div>
-                    <span className={`text-xs font-medium ${isSelected ? "text-printa-red" : "text-gray-600"}`}>
-                      {cat.name}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setWizardStep(1)} className="rounded-xl">
-                Back
-              </Button>
-              <Button onClick={() => setWizardStep(3)} className="rounded-xl">
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3 — Employees */}
-        {wizardStep === 3 && (
-          <div className="space-y-4">
-            <p className="text-xs text-gray-500">Assign employees who work at this store</p>
-            <div className="space-y-2">
-              {employees.map((emp, index) => {
-                const isSelected = form.employeeIds.includes(emp.id);
-                const colorClass = avatarColors[index % avatarColors.length];
-                return (
-                  <button
-                    key={emp.id}
-                    type="button"
-                    onClick={() => toggleEmployee(emp.id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
-                      isSelected
-                        ? "border-printa-red bg-printa-red/5"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-full ${colorClass} flex items-center justify-center text-xs font-bold flex-shrink-0`}>
-                      {emp.avatar}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">{emp.name}</p>
-                      <p className="text-[11px] text-gray-400">{emp.role}</p>
-                    </div>
-                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-                      isSelected ? "border-printa-red bg-printa-red" : "border-gray-300"
-                    }`}>
-                      {isSelected && (
-                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                          <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setWizardStep(2)} className="rounded-xl">
-                Back
-              </Button>
-              <Button onClick={handleSave} className="rounded-xl">
-                {isEditing ? "Save Changes" : "Create Store"}
-              </Button>
-            </div>
-          </div>
-        )}
       </ResponsiveModal>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Store?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{storeToDelete?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmedDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };

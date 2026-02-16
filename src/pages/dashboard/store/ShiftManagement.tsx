@@ -1,6 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, ChevronRight, Clock, Delete, LockKeyhole } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { useAuth } from "@/context/auth-context";
+import { useStore } from "@/context/store-context";
+import { listMockDirectoryUsers } from "@/mock-api/auth";
+import { Button } from "@/components/ui/button";
 
 type Employee = {
   id: string;
@@ -11,11 +17,19 @@ type Employee = {
   status: "active" | "off";
 };
 
-const employees: Employee[] = [
-  { id: "e1", name: "Leslie K.", role: "Cashier", pin: "1234", avatar: "LK", status: "active" },
-  { id: "e2", name: "Cameron W.", role: "Operator", pin: "4567", avatar: "CW", status: "off" },
-  { id: "e3", name: "Jacob J.", role: "Supervisor", pin: "7890", avatar: "JJ", status: "off" },
-];
+const roleLabel: Record<string, string> = {
+  owner: "Owner",
+  manager: "Manager",
+  staff: "Staff",
+};
+
+const toInitials = (name: string) =>
+  name
+    .split(" ")
+    .map((part) => part.trim()[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
 const avatarColors = [
   "bg-rose-100 text-rose-600",
@@ -30,7 +44,8 @@ const PinPad: React.FC<{
   employee: Employee;
   onBack?: () => void;
   showBackButton?: boolean;
-}> = ({ employee, onBack, showBackButton }) => {
+  onClockIn?: (employee: Employee) => void;
+}> = ({ employee, onBack, showBackButton, onClockIn }) => {
   const [pinInput, setPinInput] = useState("");
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isWrong, setIsWrong] = useState(false);
@@ -151,9 +166,9 @@ const PinPad: React.FC<{
       </div>
 
       {/* Action button */}
-      <button
+      <Button
         type="button"
-        onClick={isUnlocked ? handleReset : undefined}
+        onClick={isUnlocked ? () => onClockIn?.(employee) ?? handleReset() : undefined}
         disabled={!isUnlocked}
         className={`mt-6 w-full max-w-[240px] h-12 rounded-2xl text-sm font-semibold transition ${
           isUnlocked
@@ -162,24 +177,69 @@ const PinPad: React.FC<{
         }`}
       >
         {isUnlocked ? "Clock In" : "Enter PIN to continue"}
-      </button>
+      </Button>
     </div>
   );
 };
 
 /* ─── Main Page ─── */
 const ShiftManagement: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { activeStore } = useStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMobilePin, setShowMobilePin] = useState(false);
+  const scopedEmployees = useMemo(() => {
+    if (!user) return [];
+
+    const directory = listMockDirectoryUsers(user.businessId);
+    const activeStoreId = activeStore?.id;
+    const filtered = directory.filter((member) => {
+      if (member.id === user.id) return true;
+      if (!activeStoreId) return false;
+      if (member.role === "owner") return true;
+      return (member.assignedStoreIds ?? []).includes(activeStoreId);
+    });
+
+    const uniqueMembers = Array.from(new Map(filtered.map((member) => [member.id, member])).values());
+
+    return uniqueMembers
+      .map<Employee>((member) => ({
+        id: member.id,
+        name: member.name,
+        role: roleLabel[member.role] ?? "Staff",
+        pin: member.pin,
+        avatar: toInitials(member.name),
+        status: member.id === user.id ? "active" : "off",
+      }))
+      .sort((a, b) => {
+        if (a.id === user.id) return -1;
+        if (b.id === user.id) return 1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [activeStore?.id, user]);
 
   const selectedEmployee = useMemo(
-    () => employees.find((e) => e.id === selectedId) ?? null,
-    [selectedId],
+    () => scopedEmployees.find((e) => e.id === selectedId) ?? null,
+    [scopedEmployees, selectedId],
   );
+
+  useEffect(() => {
+    if (!selectedId) return;
+    if (!scopedEmployees.some((employee) => employee.id === selectedId)) {
+      setSelectedId(null);
+      setShowMobilePin(false);
+    }
+  }, [scopedEmployees, selectedId]);
 
   const handleSelectEmployee = (id: string) => {
     setSelectedId(id);
     setShowMobilePin(true);
+  };
+
+  const handleClockIn = (emp: Employee) => {
+    toast.success(`${emp.name} clocked in successfully`);
+    setTimeout(() => navigate("/dashboard"), 600);
   };
 
   return (
@@ -191,6 +251,7 @@ const ShiftManagement: React.FC = () => {
             employee={selectedEmployee}
             showBackButton
             onBack={() => setShowMobilePin(false)}
+            onClockIn={handleClockIn}
           />
         </div>
       )}
@@ -201,7 +262,9 @@ const ShiftManagement: React.FC = () => {
         <div className="flex-1 min-w-0">
           <div className="mb-5">
             <h1 className="dashboard-page-title">Shift Management</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Select an employee to clock in</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {activeStore?.name ?? "Store"} · Select an employee to clock in
+            </p>
           </div>
 
           {/* Time indicator */}
@@ -212,7 +275,7 @@ const ShiftManagement: React.FC = () => {
 
           {/* Employee cards */}
           <div className="space-y-2">
-            {employees.map((emp, index) => {
+            {scopedEmployees.map((emp, index) => {
               const isSelected = emp.id === selectedId;
               const colorClass = avatarColors[index % avatarColors.length];
               return (
@@ -247,7 +310,7 @@ const ShiftManagement: React.FC = () => {
         <div className="hidden lg:block w-[360px] flex-shrink-0">
           <div className="sticky top-2 h-[calc(100vh-2rem)] bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             {selectedEmployee ? (
-              <PinPad employee={selectedEmployee} />
+              <PinPad employee={selectedEmployee} onClockIn={handleClockIn} />
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
                 <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-3">

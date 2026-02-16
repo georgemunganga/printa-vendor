@@ -1,6 +1,8 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { mockOrders } from "@/data/mockOrders";
 import { PrintJob, PrintJobStatus } from "@/types";
+import { useStore } from "./store-context";
+import { scopeItemsByActiveStore } from "@/lib/store-scope";
 
 interface JobContextValue {
   jobs: PrintJob[];
@@ -14,8 +16,8 @@ interface JobContextValue {
 
 const JobContext = createContext<JobContextValue | undefined>(undefined);
 
-const normalizeMockOrders = (): PrintJob[] => {
-  return mockOrders.map((order) => ({
+const normalizeMockOrders = (activeStoreId: string | null | undefined): PrintJob[] => {
+  return scopeItemsByActiveStore(mockOrders, activeStoreId).map((order) => ({
     ...order,
     createdAt: new Date(order.createdAt),
     estimatedDelivery: order.estimatedDelivery ? new Date(order.estimatedDelivery) : undefined,
@@ -48,7 +50,13 @@ const addStatusHistory = (job: PrintJob, status: PrintJobStatus) => {
 };
 
 const JobProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [jobs, setJobs] = useState<PrintJob[]>(normalizeMockOrders());
+  const { activeStore } = useStore();
+  const [jobs, setJobs] = useState<PrintJob[]>(() => normalizeMockOrders(activeStore?.id));
+
+  // Reset jobs when active store changes (jobs are store-scoped)
+  useEffect(() => {
+    setJobs(normalizeMockOrders(activeStore?.id));
+  }, [activeStore?.id]);
 
   const updateJob = useCallback(
     (id: string, updater: (job: PrintJob) => PrintJob) => {

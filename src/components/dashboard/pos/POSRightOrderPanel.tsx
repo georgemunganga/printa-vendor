@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Banknote, CreditCard, Minus, Plus, ReceiptText, Smartphone, X } from "lucide-react";
+import { Banknote, CreditCard, Minus, Plus, ReceiptText, Smartphone, X, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ResponsiveModal } from "@/components/ui/responsive-modal";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type PaymentMethod = "cash" | "card" | "ewallet";
 
@@ -66,6 +69,244 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
   isOrderFloating = false,
   layoutMode = "desktop",
 }) => {
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [cashReceived, setCashReceived] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCVV, setCardCVV] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const change = cashReceived ? parseFloat(cashReceived) - total : 0;
+  const canCompleteCash = parseFloat(cashReceived) >= total;
+  const canCompleteCard = cardNumber && cardExpiry && cardCVV;
+  const canCompleteMobile = mobileNumber && mobileNumber.length >= 10;
+
+  const resetPaymentForm = () => {
+    setCashReceived("");
+    setCardNumber("");
+    setCardExpiry("");
+    setCardCVV("");
+    setMobileNumber("");
+    setIsProcessing(false);
+  };
+
+  const handleOpenPaymentModal = () => {
+    setShowPaymentModal(true);
+  };
+
+  const handleCompletePayment = async () => {
+    setIsProcessing(true);
+    // Simulate payment processing
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    onCharge();
+    setShowPaymentModal(false);
+    resetPaymentForm();
+  };
+
+  const renderPaymentModal = () => (
+    <ResponsiveModal
+      open={showPaymentModal}
+      onOpenChange={(open) => {
+        if (!open) {
+          setShowPaymentModal(false);
+          resetPaymentForm();
+        }
+      }}
+      title={`Complete ${paymentMethod === "cash" ? "Cash" : paymentMethod === "card" ? "Card" : "E-Wallet"} Payment`}
+    >
+      <div className="space-y-6">
+        {/* Cash Payment */}
+        {paymentMethod === "cash" && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-br from-printa-red to-printa-red rounded-3xl p-4 text-white text-center">
+              <div className="text-sm font-semibold uppercase tracking-wider opacity-80 mb-2">
+                Bill Total
+              </div>
+              <div className="text-6xl font-bold mb-2">
+                K{total.toFixed(2)}
+              </div>
+              <div className="text-sm opacity-80">
+                {itemCount} item{itemCount !== 1 ? 's' : ''}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cash-received" className="text-base font-semibold">
+                Cash Received
+              </Label>
+              <Input
+                id="cash-received"
+                type="number"
+                value={cashReceived}
+                onChange={(e) => setCashReceived(e.target.value)}
+                placeholder="0.00"
+                className="h-14 text-2xl font-semibold text-center"
+                step="0.01"
+                min={total}
+              />
+            </div>
+
+            {cashReceived && parseFloat(cashReceived) >= total && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-green-50 border-2 border-green-200 rounded-2xl p-3 text-center"
+              >
+                <div className="text-sm font-semibold text-green-700 uppercase tracking-wider mb-2">
+                  Change to Return
+                </div>
+                <div className="text-3xl font-bold text-green-700">
+                  K{change.toFixed(2)}
+                </div>
+              </motion.div>
+            )}
+
+            {cashReceived && parseFloat(cashReceived) < total && (
+              <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 text-center">
+                <p className="text-sm font-semibold text-amber-700">
+                  Insufficient amount. Need K{(total - parseFloat(cashReceived)).toFixed(2)} more.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Card Payment */}
+        {paymentMethod === "card" && (
+          <div className="space-y-4">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-3xl p-6 text-white">
+              <div className="flex items-center justify-between mb-6">
+                <CreditCard className="w-10 h-10" />
+                <div className="text-right">
+                  <div className="text-sm opacity-80">Amount to Charge</div>
+                  <div className="text-3xl font-bold">K{total.toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="card-number">Card Number</Label>
+              <Input
+                id="card-number"
+                type="text"
+                value={cardNumber}
+                onChange={(e) => setCardNumber(e.target.value.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim())}
+                placeholder="1234 5678 9012 3456"
+                maxLength={19}
+                className="h-12 text-lg"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="card-expiry">Expiry Date</Label>
+                <Input
+                  id="card-expiry"
+                  type="text"
+                  value={cardExpiry}
+                  onChange={(e) => {
+                    let value = e.target.value.replace(/\D/g, '');
+                    if (value.length >= 2) {
+                      value = value.slice(0, 2) + '/' + value.slice(2, 4);
+                    }
+                    setCardExpiry(value);
+                  }}
+                  placeholder="MM/YY"
+                  maxLength={5}
+                  className="h-12 text-lg"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="card-cvv">CVV</Label>
+                <Input
+                  id="card-cvv"
+                  type="text"
+                  value={cardCVV}
+                  onChange={(e) => setCardCVV(e.target.value.replace(/\D/g, ''))}
+                  placeholder="123"
+                  maxLength={3}
+                  className="h-12 text-lg"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* E-Wallet / Mobile Money Payment */}
+        {paymentMethod === "ewallet" && (
+          <div className="space-y-4">
+            <div className="bg-gradient-to-br from-purple-500 to-purple-700 rounded-3xl p-6 text-white">
+              <div className="flex items-center justify-between mb-4">
+                <Smartphone className="w-10 h-10" />
+                <div className="text-right">
+                  <div className="text-sm opacity-80">Amount to Charge</div>
+                  <div className="text-3xl font-bold">K{total.toFixed(2)}</div>
+                </div>
+              </div>
+              <div className="text-sm opacity-90">
+                Customer will receive a prompt on their phone
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="mobile-number" className="text-base font-semibold">
+                Mobile Money Number
+              </Label>
+              <Input
+                id="mobile-number"
+                type="tel"
+                value={mobileNumber}
+                onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
+                placeholder="0971234567"
+                maxLength={10}
+                className="h-14 text-xl font-semibold"
+              />
+              <p className="text-xs text-gray-500">
+                Enter customer's mobile money number (MTN, Airtel, or Zamtel)
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 pt-4">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowPaymentModal(false);
+              resetPaymentForm();
+            }}
+            disabled={isProcessing}
+            className="flex-1 h-12"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCompletePayment}
+            disabled={
+              isProcessing ||
+              (paymentMethod === "cash" && !canCompleteCash) ||
+              (paymentMethod === "card" && !canCompleteCard) ||
+              (paymentMethod === "ewallet" && !canCompleteMobile)
+            }
+            className="flex-1 h-12 bg-printa-red hover:bg-red-700"
+          >
+            {isProcessing ? (
+              <>Processing...</>
+            ) : (
+              <>
+                <Check className="w-5 h-5 mr-2" />
+                Complete Payment
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </ResponsiveModal>
+  );
+
   if (layoutMode === "mobile") {
     return (
       <div className="flex h-full min-h-0 flex-col bg-gray-50">
@@ -98,21 +339,21 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
                     <button
                       type="button"
                       onClick={() => onUpdateQty(line.service.id, -1)}
-                      className="w-7 h-7 rounded-md bg-gray-100 text-gray-700 flex items-center justify-center"
+                      className="w-7 h-7 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center"
                     >
                       <Minus size={12} />
                     </button>
                     <button
                       type="button"
                       onClick={() => onUpdateQty(line.service.id, 1)}
-                      className="w-7 h-7 rounded-md bg-gray-100 text-gray-700 flex items-center justify-center"
+                      className="w-7 h-7 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center"
                     >
                       <Plus size={12} />
                     </button>
                     <button
                       type="button"
                       onClick={() => onRemove(line.service.id)}
-                      className="w-7 h-7 rounded-md bg-red-50 text-red-500 flex items-center justify-center"
+                      className="w-7 h-7 rounded-xl bg-red-50 text-red-500 flex items-center justify-center"
                     >
                       <X size={12} />
                     </button>
@@ -147,13 +388,16 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
               </div>
             </div>
             <Button
-              onClick={onCharge}
+              onClick={handleOpenPaymentModal}
               className="w-full h-12 rounded-full bg-printa-red hover:bg-red-700 text-white text-base font-semibold"
             >
               Place Order
             </Button>
           </div>
         )}
+
+        {/* Payment Modal */}
+        {renderPaymentModal()}
       </div>
     );
   }
@@ -277,13 +521,16 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
           </div>
 
           <Button
-            onClick={onCharge}
+            onClick={handleOpenPaymentModal}
             className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold"
           >
             Place Order - K{total.toFixed(2)}
           </Button>
         </div>
       )}
+
+      {/* Payment Modal */}
+      {renderPaymentModal()}
     </div>
   );
 };

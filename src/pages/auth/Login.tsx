@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
+import { useGoogleLogin } from "@react-oauth/google";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from "sonner";
 import { PhoneCall, Mail, ChevronDown, Check } from 'lucide-react';
 import { AuthLayout } from '@/components/auth/AuthLayout';
+import { requestLoginOtp } from "@/mock-api/auth";
+import { fetchGoogleUserProfile } from "@/lib/google-auth";
 
 const countryCodes = [
   { code: '+260', country: 'Zambia', flag: '🇿🇲' },
@@ -105,33 +108,76 @@ const Login = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [countryCode, setCountryCode] = useState(countryCodes[0]);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleSendOTP = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginMethod === 'phone') {
-      if (!phoneNumber || phoneNumber.length < 9) {
-        toast.error("Please enter a valid phone number");
+    try {
+      if (loginMethod === 'phone') {
+        if (!phoneNumber || phoneNumber.length < 9) {
+          toast.error("Please enter a valid phone number");
+          return;
+        }
+        const value = `${countryCode.code}${phoneNumber}`;
+        const { challengeId } = requestLoginOtp("phone", value);
+        toast.success("OTP sent to your phone");
+        setTimeout(() => {
+          navigate(
+            `/otp?purpose=login&challenge=${encodeURIComponent(challengeId)}&method=phone&value=${encodeURIComponent(value)}`
+          );
+        }, 400);
         return;
       }
-      toast.success("OTP sent to your phone");
-      setTimeout(() => {
-        navigate(`/otp?method=phone&value=${encodeURIComponent(countryCode.code + phoneNumber)}`);
-      }, 400);
-    } else {
+
       if (!email || !email.includes('@')) {
         toast.error("Please enter a valid email address");
         return;
       }
+      const { challengeId } = requestLoginOtp("email", email);
       toast.success("OTP sent to your email");
       setTimeout(() => {
-        navigate(`/otp?method=email&value=${encodeURIComponent(email)}`);
+        navigate(
+          `/otp?purpose=login&challenge=${encodeURIComponent(challengeId)}&method=email&value=${encodeURIComponent(email)}`
+        );
       }, 400);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to send OTP";
+      toast.error(message);
     }
   };
 
+  const googleSignIn = useGoogleLogin({
+    scope: "openid email profile",
+    onSuccess: (tokenResponse) => {
+      void (async () => {
+        try {
+          const profile = await fetchGoogleUserProfile(tokenResponse.access_token);
+          const { challengeId } = requestLoginOtp("email", profile.email);
+          toast.success("Google account verified. Enter OTP to continue.");
+          navigate(
+            `/otp?purpose=login&challenge=${encodeURIComponent(challengeId)}&method=email&value=${encodeURIComponent(profile.email)}`
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unable to start Google login";
+          toast.error(message);
+        } finally {
+          setIsGoogleLoading(false);
+        }
+      })();
+    },
+    onError: () => {
+      setIsGoogleLoading(false);
+      toast.error("Google authentication failed.");
+    },
+  });
+
   const handleGoogleSignIn = () => {
-    toast.success("Signing in with Google...");
-    setTimeout(() => navigate('/dashboard'), 1000);
+    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+      toast.error("Google auth is not configured. Set VITE_GOOGLE_CLIENT_ID.");
+      return;
+    }
+    setIsGoogleLoading(true);
+    googleSignIn();
   };
 
   return (
@@ -146,10 +192,11 @@ const Login = () => {
       <button
         type="button"
         onClick={handleGoogleSignIn}
+        disabled={isGoogleLoading}
         className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all"
       >
         <GoogleIcon />
-        Continue with Google
+        {isGoogleLoading ? "Connecting..." : "Continue with Google"}
       </button>
 
       {/* Divider */}
@@ -168,7 +215,7 @@ const Login = () => {
           <button
             type="button"
             onClick={() => setLoginMethod('phone')}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition ${
+            className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition ${
               loginMethod === 'phone' ? 'bg-printa-red text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
@@ -180,7 +227,7 @@ const Login = () => {
           <button
             type="button"
             onClick={() => setLoginMethod('email')}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition ${
+            className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition ${
               loginMethod === 'email' ? 'bg-printa-red text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
@@ -221,7 +268,7 @@ const Login = () => {
 
       <p className="mt-6 text-center text-sm text-gray-500">
         Don't have an account?{' '}
-        <Link to="/signup" className="text-printa-red hover:underline font-semibold">Sign up</Link>
+        <Link to="/onboarding" className="text-printa-red hover:underline font-semibold">Sign up</Link>
       </p>
     </AuthLayout>
   );

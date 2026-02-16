@@ -116,25 +116,25 @@ export const IncomingJobCard: React.FC<IncomingJobCardProps> = ({
       {/* Notice flags */}
       <div className="flex flex-wrap items-center gap-1.5 mb-2 pr-24">
         {job.urgent && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 text-red-500 text-[10px] font-bold uppercase border border-red-100">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xl bg-red-50 text-red-500 text-[10px] font-bold uppercase border border-red-100">
             <AlertTriangle size={10} />
             Urgent
           </span>
         )}
         {isLargeJob && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-printa-red/10 text-printa-red text-[10px] font-bold uppercase border border-printa-red">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xl bg-printa-red/10 text-printa-red text-[10px] font-bold uppercase border border-printa-red">
             <Package size={10} />
             Large Job
           </span>
         )}
         {job.deliveryType === "rider" && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-printa-black text-white text-[10px] font-bold uppercase border border-printa-black">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xl bg-printa-black text-white text-[10px] font-bold uppercase border border-printa-black">
             <Bike size={10} />
             Delivery {job.distance && `· ${job.distance}km`}
           </span>
         )}
         {job.deliveryType === "pickup" && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-printa-black text-white  text-[10px] font-bold uppercase border border-printa-black">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xl bg-printa-black text-white  text-[10px] font-bold uppercase border border-printa-black">
             <MapPin size={10} />
             Pickup
           </span>

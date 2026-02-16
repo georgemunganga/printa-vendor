@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Check, CheckCheck, MessageCircle, FileText, ExternalLink, Paperclip, X, File } from "lucide-react";
@@ -9,6 +9,8 @@ import { PrintJob } from "@/types";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import { BackButton } from "@/components/dashboard/BackButton";
+import { useStore } from "@/context/store-context";
+import { scopeItemsByActiveStore } from "@/lib/store-scope";
 
 interface Attachment {
   id: string;
@@ -41,8 +43,8 @@ interface ChatThread {
 }
 
 // Generate mock chat threads from orders
-const getMockThreads = (): ChatThread[] =>
-  mockOrders
+const getMockThreads = (orders: PrintJob[]): ChatThread[] =>
+  orders
     .filter((o) => o.status !== "cancelled")
     .map((order) => ({
       order,
@@ -579,14 +581,25 @@ const ChatView: React.FC<{
 const ChatPage = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
+  const { activeStore } = useStore();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [threads] = useState<ChatThread[]>(getMockThreads);
+  const scopedOrders = useMemo(
+    () => scopeItemsByActiveStore(mockOrders, activeStore?.id),
+    [activeStore?.id]
+  );
+  const [threads, setThreads] = useState<ChatThread[]>(() => getMockThreads(scopedOrders));
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(orderId ?? null);
 
   const activeOrder = activeOrderId
-    ? mockOrders.find((o) => o.id === activeOrderId)
+    ? scopedOrders.find((o) => o.id === activeOrderId)
     : null;
+
+  useEffect(() => {
+    setThreads(getMockThreads(scopedOrders));
+    setMessages([]);
+    setActiveOrderId(null);
+  }, [scopedOrders]);
 
   useEffect(() => {
     if (activeOrderId) {

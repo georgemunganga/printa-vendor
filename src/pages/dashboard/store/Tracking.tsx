@@ -19,6 +19,8 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { toast } from "sonner";
 import { mockOrders } from "@/data/mockOrders";
 import { DEFAULT_LOCATIONS } from "@/data/locations";
+import { useStore } from "@/context/store-context";
+import { scopeItemsByActiveStore } from "@/lib/store-scope";
 
 const MapPicker = lazy(() => import("@/components/MapPicker"));
 
@@ -47,12 +49,14 @@ const mockTrackingStats = {
 const TrackingPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { activeStore } = useStore();
   const [showPanel, setShowPanel] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const scopedOrders = scopeItemsByActiveStore(mockOrders, activeStore?.id);
 
   // Get order if ID provided, otherwise show all active orders
-  const order = id ? mockOrders.find((o) => o.id === id) : null;
-  const activeOrders = mockOrders.filter(
+  const order = id ? scopedOrders.find((o) => o.id === id) : null;
+  const activeOrders = scopedOrders.filter(
     (o) => o.status === "printing" || o.status === "ready"
   );
 
@@ -335,7 +339,7 @@ const TrackingPage = () => {
                 {mockTrackingStats.totalDistance} <span className="text-gray-400 font-normal">•</span> {mockTrackingStats.estimatedArrival}
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                {order?.printer.address || "Westlands, Nairobi"}
+                {order?.printer.address || activeStore?.address || "Store location unavailable"}
               </p>
             </div>
 

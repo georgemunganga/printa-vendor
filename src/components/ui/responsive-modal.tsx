@@ -7,13 +7,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { cn } from "@/lib/utils";
 
 interface ResponsiveModalProps {
@@ -52,30 +46,17 @@ export function ResponsiveModal({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        className={cn(
-          "rounded-t-3xl max-h-[85vh] overflow-y-auto",
-          className
-        )}
-      >
-        {/* Drag handle indicator */}
-        <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-gray-300 mb-4" />
-        {(title || description) && (
-          <SheetHeader className="text-left mb-4">
-            {title && <SheetTitle>{title}</SheetTitle>}
-            {description && <SheetDescription>{description}</SheetDescription>}
-          </SheetHeader>
-        )}
-        <div className="pb-6">
-          {children}
-        </div>
-      </SheetContent>
-    </Sheet>
+    <BottomSheet
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title={title}
+      description={description}
+      className={className}
+    >
+      {children}
+    </BottomSheet>
   );
 }
 
-// Export individual parts for more control
+// Export Dialog parts for backward compatibility
 export { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription };
-export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription };

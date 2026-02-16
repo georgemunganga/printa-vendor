@@ -14,6 +14,7 @@ import {
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { useJobContext } from "@/context/job-context";
+import { useStore } from "@/context/store-context";
 import { PrintJob } from "@/types";
 
 /* ─── Channel filter ─── */
@@ -95,6 +96,7 @@ const OrderHistoryPage: React.FC = () => {
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const { jobs } = useJobContext();
+  const { activeStore } = useStore();
 
   const filtered = useMemo(() => {
     let list = jobs;
@@ -123,7 +125,9 @@ const OrderHistoryPage: React.FC = () => {
     <DashboardLayout>
       <div className="mb-5">
         <h1 className="dashboard-page-title">Order History</h1>
-        <p className="dashboard-page-subtitle">{jobs.length} total orders</p>
+        <p className="dashboard-page-subtitle">
+          {activeStore?.name ?? "Store"} · {jobs.length} total orders
+        </p>
       </div>
 
       {/* ── Channel pill switch ── */}

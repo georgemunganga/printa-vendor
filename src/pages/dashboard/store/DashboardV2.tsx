@@ -12,6 +12,8 @@ import {
 } from "@/components/dashboard/live-feed/LiveFeedFilterBar";
 import { IncomingJobCard } from "@/components/dashboard/live-feed/IncomingJobCard";
 import { ActiveJobCard } from "@/components/dashboard/live-feed/ActiveJobCard";
+import { useStore } from "@/context/store-context";
+import { scopeItemsByActiveStore } from "@/lib/store-scope";
 
 const addHistory = (job: PrintJob, status: PrintJobStatus) => {
   const history = job.statusHistory ? [...job.statusHistory] : [];
@@ -123,8 +125,14 @@ const simulatedOrders: Omit<PrintJob, "createdAt" | "acceptDeadline" | "lastUpda
 ];
 
 const DashboardV2: React.FC = () => {
+  const { activeStore } = useStore();
+  const scopedSimulatedOrders = useMemo(
+    () => scopeItemsByActiveStore(simulatedOrders, activeStore?.id),
+    [activeStore?.id]
+  );
+
   const [jobs, setJobs] = useState<PrintJob[]>(() =>
-    mockLiveOrders.map((o) => ({
+    scopeItemsByActiveStore(mockLiveOrders, activeStore?.id).map((o) => ({
       ...o,
       createdAt: new Date(o.createdAt),
       estimatedDelivery: o.estimatedDelivery
@@ -142,6 +150,19 @@ const DashboardV2: React.FC = () => {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
 
+  useEffect(() => {
+    setJobs(
+      scopeItemsByActiveStore(mockLiveOrders, activeStore?.id).map((o) => ({
+        ...o,
+        createdAt: new Date(o.createdAt),
+        estimatedDelivery: o.estimatedDelivery ? new Date(o.estimatedDelivery) : undefined,
+        acceptDeadline: o.acceptDeadline ? new Date(o.acceptDeadline) : undefined,
+        lastUpdated: new Date(),
+        statusHistory: [{ status: o.status, timestamp: new Date(o.createdAt) }],
+      }))
+    );
+  }, [activeStore?.id]);
+
   // ── Simulate incoming orders ──
   const simIndexRef = useRef(0);
   const soundEnabledRef = useRef(soundEnabled);
@@ -152,13 +173,18 @@ const DashboardV2: React.FC = () => {
 
     // Random interval between 8–20 seconds
     const scheduleNext = () => {
+      if (scopedSimulatedOrders.length === 0) {
+        return setTimeout(() => {
+          timerId = scheduleNext();
+        }, 12_000);
+      }
       const delay = 8_000 + Math.random() * 12_000;
       return setTimeout(() => {
-        if (simIndexRef.current >= simulatedOrders.length) {
+        if (simIndexRef.current >= scopedSimulatedOrders.length) {
           simIndexRef.current = 0; // loop back
         }
 
-        const template = simulatedOrders[simIndexRef.current];
+        const template = scopedSimulatedOrders[simIndexRef.current];
         simIndexRef.current += 1;
 
         const now = new Date();
@@ -187,7 +213,7 @@ const DashboardV2: React.FC = () => {
 
     let timerId = scheduleNext();
     return () => clearTimeout(timerId);
-  }, [isOnline]);
+  }, [isOnline, scopedSimulatedOrders]);
 
   // ── Job actions ──
   const updateJob = useCallback(
@@ -329,7 +355,7 @@ const DashboardV2: React.FC = () => {
               Welcome back
             </p>
             <h1 className="mt-0.5 dashboard-page-title">
-              Downtown Cafe
+              {activeStore?.name ?? "Store Dashboard"}
             </h1>
           </div>
           <LiveFeedTopBar

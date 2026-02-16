@@ -5,7 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundaryProvider } from "@/components/ErrorBoundaryProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { Preloader } from "@/components/Preloader";
 import PrintFlow from "./pages/PrintFlow";
@@ -27,17 +27,34 @@ import Login from "./pages/auth/Login";
 import SignUp from "./pages/auth/SignUp";
 import Otp from "./pages/auth/Otp";
 import JobDetails from "./pages/dashboard/job/[id]";
+import JobDetailsV2 from "./pages/dashboard/job/[id]-v2";
 import Feedback from "./pages/dashboard/Feedback";
-import Tracking from "./pages/dashboard/Tracking";
-import Chat from "./pages/dashboard/Chat";
-import DashboardV2 from "./pages/dashboard/DashboardV2";
-import POSPage from "./pages/pos/POSPage";
-import ShiftManagement from "./pages/dashboard/ShiftManagement";
+import Tracking from "./pages/dashboard/store/Tracking";
+import Chat from "./pages/dashboard/store/Chat";
+import DashboardV2 from "./pages/dashboard/store/DashboardV2";
+import POSPage from "./pages/dashboard/store/pos/POSPage";
 import Stores from "./pages/dashboard/Stores";
+import VendorOnboarding from "./pages/dashboard/VendorOnboarding";
+import Subscription from "./pages/dashboard/owner/Subscription";
+import Team from "./pages/dashboard/Team";
+import Notifications from "./pages/dashboard/Notifications";
+import HelpCenter from "./pages/dashboard/help/HelpCenter";
+import FAQ from "./pages/dashboard/help/FAQ";
+import FixAProblem from "./pages/dashboard/help/FixAProblem";
+import DownloadingSavingSharing from "./pages/dashboard/help/DownloadingSavingSharing";
+import { StoreEntrypoint } from "./pages/StoreEntrypoint";
+import { NotificationProvider } from "@/context/notification-context";
 import { JobProvider } from "@/context/job-context";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { StorePinLockOverlay } from "@/components/auth/StorePinLockOverlay";
 
 const PRELOADER_MIN_VISIBLE_MS = 500;
 const queryClient = new QueryClient();
+
+const RouteAwareStoreLock = () => {
+  const location = useLocation();
+  return <StorePinLockOverlay pathname={location.pathname} />;
+};
 
 const App = () => {
   const [isAppReady, setIsAppReady] = useState(false);
@@ -85,42 +102,97 @@ const App = () => {
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <RouteAwareStoreLock />
+            <NotificationProvider>
             <JobProvider>
               <AnimatePresence mode="wait">
                 <Routes>
-                  <Route path="/" element={<PrintFlow />} />
-                  <Route path="/customize" element={<Customize />} />
-                  <Route path="/checkout" element={<Checkout />} />
-                  <Route path="/upload" element={<Upload />} />
-                  <Route path="/dashboard" element={<DashboardV2 />} />
-                  <Route path="/dashboard-old" element={<Dashboard />} />
-                  <Route path="/dashboard/job-feed" element={<Navigate to="/dashboard/orders" replace />} />
-                  <Route path="/dashboard/orders" element={<OrderHistory />} />
-                  <Route path="/dashboard/locations" element={<Locations />} />
-                  <Route path="/dashboard/profile" element={<Profile />} />
-                  <Route path="/dashboard/profile/edit" element={<EditProfile />} />
-                  <Route path="/dashboard/payment-methods" element={<PaymentMethods />} />
-                  <Route path="/dashboard/settings" element={<Settings />} />
-                  <Route path="/dashboard/support" element={<Support />} />
-                  <Route path="/dashboard/feedback" element={<Feedback />} />
-                  <Route path="/dashboard/job/:id" element={<JobDetails />} />
-                  <Route path="/dashboard/tracking" element={<Tracking />} />
-                  <Route path="/dashboard/tracking/:id" element={<Tracking />} />
-                  <Route path="/dashboard/chat" element={<Chat />} />
-                  <Route path="/dashboard/chat/:orderId" element={<Chat />} />
-                  <Route path="/dashboard/pos" element={<POSPage />} />
-                  <Route path="/dashboard/shift-management" element={<ShiftManagement />} />
-                  <Route path="/dashboard/stores" element={<Stores />} />
-                  <Route path="/how-it-works" element={<HowItWorks />} />
-                  <Route path="/pricing" element={<Pricing />} />
+                  {/* ── Public routes ── */}
                   <Route path="/login" element={<Login />} />
                   <Route path="/signup" element={<SignUp />} />
                   <Route path="/otp" element={<Otp />} />
+                  <Route path="/onboarding" element={<VendorOnboarding />} />
+                  <Route path="/how-it-works" element={<HowItWorks />} />
+                  <Route path="/pricing" element={<Pricing />} />
+
+                  {/* ── Protected routes (require auth) ── */}
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute routeScope="root">
+                        <Navigate to="/dashboard/stores" replace />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/printflow" element={<ProtectedRoute routeScope="store"><PrintFlow /></ProtectedRoute>} />
+                  <Route path="/customize" element={<ProtectedRoute routeScope="store"><Customize /></ProtectedRoute>} />
+                  <Route path="/checkout" element={<ProtectedRoute routeScope="store"><Checkout /></ProtectedRoute>} />
+                  <Route path="/upload" element={<ProtectedRoute routeScope="store"><Upload /></ProtectedRoute>} />
+                  <Route path="/dashboard" element={<ProtectedRoute routeScope="store"><DashboardV2 /></ProtectedRoute>} />
+                  <Route path="/dashboard-old" element={<ProtectedRoute routeScope="store"><Dashboard /></ProtectedRoute>} />
+                  <Route path="/dashboard/job-feed" element={<Navigate to="/dashboard/orders" replace />} />
+                  <Route path="/dashboard/orders" element={<ProtectedRoute routeScope="store"><OrderHistory /></ProtectedRoute>} />
+                  <Route path="/dashboard/locations" element={<ProtectedRoute routeScope="store"><Locations /></ProtectedRoute>} />
+                  <Route path="/dashboard/profile" element={<ProtectedRoute routeScope="root"><Profile /></ProtectedRoute>} />
+                  <Route path="/dashboard/profile/edit" element={<ProtectedRoute routeScope="root"><EditProfile /></ProtectedRoute>} />
+                  <Route path="/dashboard/payment-methods" element={<ProtectedRoute routeScope="root"><PaymentMethods /></ProtectedRoute>} />
+                  <Route path="/dashboard/settings" element={<ProtectedRoute routeScope="store" requiredPermission="manage_settings"><Settings /></ProtectedRoute>} />
+                  <Route path="/dashboard/support" element={<ProtectedRoute routeScope="root"><Support /></ProtectedRoute>} />
+                  <Route path="/dashboard/feedback" element={<ProtectedRoute routeScope="root"><Feedback /></ProtectedRoute>} />
+                  <Route path="/dashboard/job/:id" element={<ProtectedRoute routeScope="store"><JobDetails /></ProtectedRoute>} />
+                  <Route path="/dashboard/job/:id/v2" element={<ProtectedRoute routeScope="store"><JobDetailsV2 /></ProtectedRoute>} />
+                  <Route path="/dashboard/tracking" element={<ProtectedRoute routeScope="store"><Tracking /></ProtectedRoute>} />
+                  <Route path="/dashboard/tracking/:id" element={<ProtectedRoute routeScope="store"><Tracking /></ProtectedRoute>} />
+                  <Route path="/dashboard/chat" element={<ProtectedRoute routeScope="store"><Chat /></ProtectedRoute>} />
+                  <Route path="/dashboard/chat/:orderId" element={<ProtectedRoute routeScope="store"><Chat /></ProtectedRoute>} />
+                  <Route path="/dashboard/pos" element={<ProtectedRoute routeScope="store" requiredPermission="use_pos"><POSPage /></ProtectedRoute>} />
+                  <Route path="/dashboard/shift-management" element={<Navigate to="/dashboard" replace />} />
+                  <Route
+                    path="/dashboard/stores"
+                    element={
+                      <ProtectedRoute routeScope="root" requiredPermissions={["view_stores", "manage_stores"]} requiresAny>
+                        <Stores />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/subscription"
+                    element={
+                      <ProtectedRoute routeScope="root" requiredPermissions={["view_billing", "manage_billing"]} requiresAny>
+                        <Subscription />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/team"
+                    element={
+                      <ProtectedRoute routeScope="root" requiredPermissions={["view_team", "manage_team"]} requiresAny>
+                        <Team />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/notifications"
+                    element={
+                      <ProtectedRoute routeScope="root" requiredPermission="manage_notifications">
+                        <Notifications />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/dashboard/help" element={<ProtectedRoute routeScope="root"><HelpCenter /></ProtectedRoute>} />
+                  <Route path="/dashboard/help/faq" element={<ProtectedRoute routeScope="root"><FAQ /></ProtectedRoute>} />
+                  <Route path="/dashboard/help/fix-a-problem" element={<ProtectedRoute routeScope="root"><FixAProblem /></ProtectedRoute>} />
+                  <Route path="/dashboard/help/downloading-saving-sharing" element={<ProtectedRoute routeScope="root"><DownloadingSavingSharing /></ProtectedRoute>} />
                   <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
+
+                  {/* Store-specific entrypoint - matches /:storeName */}
+                  <Route path="/:storeName" element={<ProtectedRoute routeScope="any"><StoreEntrypoint /></ProtectedRoute>} />
+
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </AnimatePresence>
             </JobProvider>
+            </NotificationProvider>
           </BrowserRouter>
         </ErrorBoundaryProvider>
       </TooltipProvider>
