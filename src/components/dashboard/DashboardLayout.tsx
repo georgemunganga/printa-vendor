@@ -26,6 +26,7 @@ const PRIMARY_TABS = [
   "/dashboard/team",
   "/dashboard/notifications",
   "/dashboard/support",
+  "/dashboard/inventory",
 ];
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, pageTitle, hideMobileBottomNav = false }) => {
@@ -39,7 +40,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, page
   const isPrimaryRoute = PRIMARY_TABS.includes(normalizedPath);
   const showStackHeader = !isPrimaryRoute;
   const showBottomNav = isPrimaryRoute && !hideMobileBottomNav;
-  const mainPaddingTop = showStackHeader ? "pt-20 md:pt-24" : "pt-4 md:pt-6";
+  const mainPaddingTop = showStackHeader ? "pt-20 md:pt-24" : "pt-6 md:pt-6";
   const mainPaddingBottom = showBottomNav ? "pb-28" : "pb-8 md:pb-10";
 
   const handleLogout = () => {

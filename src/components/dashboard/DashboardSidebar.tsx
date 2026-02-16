@@ -175,7 +175,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           <button
             onClick={onStoreSignOut}
             title="Sign out of store"
-            className={`mb-2 flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-white hover:bg-white hover:text-gray-900 transition-all ${
+            className={`mb-2 flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium bg-white text-gray-900 hover:bg-gray-50 transition-all ${
               !isOpen ? "justify-center px-0" : ""
             }`}
           >

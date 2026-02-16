@@ -37,6 +37,7 @@ import Stores from "./pages/dashboard/Stores";
 import VendorOnboarding from "./pages/dashboard/VendorOnboarding";
 import Subscription from "./pages/dashboard/owner/Subscription";
 import Team from "./pages/dashboard/Team";
+import Inventory from "./pages/dashboard/Inventory";
 import Notifications from "./pages/dashboard/Notifications";
 import HelpCenter from "./pages/dashboard/help/HelpCenter";
 import FAQ from "./pages/dashboard/help/FAQ";
@@ -168,6 +169,14 @@ const App = () => {
                     element={
                       <ProtectedRoute routeScope="root" requiredPermissions={["view_team", "manage_team"]} requiresAny>
                         <Team />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/inventory"
+                    element={
+                      <ProtectedRoute routeScope="store" requiredPermission="manage_inventory">
+                        <Inventory />
                       </ProtectedRoute>
                     }
                   />

@@ -40,6 +40,7 @@ const isStoreScopedPath = (pathname: string): boolean => {
     "/dashboard/pos",
     "/dashboard/chat",
     "/dashboard/tracking",
+    "/dashboard/inventory",
     "/dashboard/settings",
     "/printflow",
     "/customize",

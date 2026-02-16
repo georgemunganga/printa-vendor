@@ -1,8 +1,11 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Bell, Lock, Shield, DollarSign, Smartphone, Check } from "lucide-react";
+import { Bell, Lock, Shield, DollarSign, Smartphone, Check, LogOut, Store } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { useCurrencyContext } from "@/context/currency-context";
+import { useAuth } from "@/context/auth-context";
+import { useStore } from "@/context/store-context";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -20,6 +23,9 @@ type ModalType = "security" | "notifications" | "privacy" | "currency" | "downlo
 
 const SettingsPage = () => {
   const { selectedCurrency, availableCurrencies, setSelectedCurrency } = useCurrencyContext();
+  const { logout } = useAuth();
+  const { setActiveStore } = useStore();
+  const navigate = useNavigate();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
 
   // Security settings state
@@ -73,11 +79,11 @@ const SettingsPage = () => {
   }, [selectedCurrency, coreSettings]);
 
   return (
-    <DashboardLayout pageTitle="App Settings">
+    <DashboardLayout pageTitle="Store Settings">
       <div className="mx-auto max-w-3xl space-y-6">
         <div>
           {/* <p className="text-sm font-semibold text-printa-red">Settings</p> */}
-          <h1 className="dashboard-page-title">App Preferences</h1>
+          <h1 className="dashboard-page-title">Store Settings</h1>
           <p className="dashboard-page-subtitle">Control your privacy, notifications, and security.</p>
         </div>
 
@@ -141,6 +147,34 @@ const SettingsPage = () => {
                 Download Now
               </Button>
             </div>
+        </div>
+
+        {/* Sign Out / Logout – mobile only */}
+        <div className="space-y-3 pt-4 md:hidden">
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-3 rounded-2xl border-gray-200 px-5 py-6 text-sm font-semibold text-gray-700"
+            onClick={() => {
+              setActiveStore(null);
+              navigate("/dashboard/stores", { replace: true });
+              toast.success("Signed out of store");
+            }}
+          >
+            <Store size={18} className="text-gray-500" />
+            Sign Out of Store
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-3 rounded-2xl border-red-200 bg-red-50 px-5 py-6 text-sm font-semibold text-red-600 hover:bg-red-100 hover:text-red-700"
+            onClick={() => {
+              logout();
+              toast.success("Logged out successfully");
+              navigate("/login", { replace: true });
+            }}
+          >
+            <LogOut size={18} />
+            Logout
+          </Button>
         </div>
       </div>
 
