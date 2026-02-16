@@ -403,7 +403,7 @@ const POSPage: React.FC = () => {
              <Button
               type="button"
               onClick={clearOrder}
-              className="h-11 px-4 rounded-xl border border-gray-300 text-gray-700 text-sm font-semibold"
+              className="h-11 px-4 rounded-xl text-sm font-semibold"
             >
               Clear
             </Button>

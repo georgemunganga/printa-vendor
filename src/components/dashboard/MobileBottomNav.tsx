@@ -22,6 +22,7 @@ const buildMobileNav = (
 
   const storeScoped = [...allNav.main, ...allNav.secondary]
     .filter((item) => item.requiresStore)
+    .filter((item) => item.path !== "/dashboard/chat")
     .slice(0, 5);
   return storeScoped;
 };

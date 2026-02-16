@@ -389,7 +389,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
             </div>
             <Button
               onClick={handleOpenPaymentModal}
-              className="w-full h-12 rounded-full bg-printa-red hover:bg-red-700 text-white text-base font-semibold"
+              className="w-full text-white text-base font-semibold"
             >
               Place Order
             </Button>

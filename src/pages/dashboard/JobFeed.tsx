@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useRef, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CheckCircle,
@@ -7,15 +7,19 @@ import {
   FileText,
   Globe,
   Package,
+  Search,
   Store,
   Truck,
+  X,
   XCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { Input } from "@/components/ui/input";
 import { useJobContext } from "@/context/job-context";
 import { useStore } from "@/context/store-context";
 import { PrintJob } from "@/types";
+import { Button } from "@/components/ui/button";
 
 /* ─── Channel filter ─── */
 type ChannelFilter = "all" | "online" | "walk-in";
@@ -95,6 +99,9 @@ const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
 const OrderHistoryPage: React.FC = () => {
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { jobs } = useJobContext();
   const { activeStore } = useStore();
 
@@ -106,8 +113,17 @@ const OrderHistoryPage: React.FC = () => {
     if (statusFilter !== "all") {
       list = list.filter((o) => o.status === statusFilter);
     }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((o) =>
+        o.id.toLowerCase().includes(q) ||
+        o.fileName.toLowerCase().includes(q) ||
+        (o.customerName && o.customerName.toLowerCase().includes(q)) ||
+        (o.customerEmail && o.customerEmail.toLowerCase().includes(q))
+      );
+    }
     return list;
-  }, [jobs, channelFilter, statusFilter]);
+  }, [jobs, channelFilter, statusFilter, searchQuery]);
 
   const getStatusCount = (key: StatusFilter) => {
     let list = jobs;
@@ -124,10 +140,65 @@ const OrderHistoryPage: React.FC = () => {
   return (
     <DashboardLayout>
       <div className="mb-5">
-        <h1 className="dashboard-page-title">Order History</h1>
-        <p className="dashboard-page-subtitle">
-          {activeStore?.name ?? "Store"} · {jobs.length} total orders
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className={searchOpen ? "hidden md:block" : ""}>
+            <h1 className="dashboard-page-title">Order History</h1>
+            <p className="dashboard-page-subtitle">
+              {activeStore?.name ?? "Store"} · {jobs.length} total orders
+            </p>
+          </div>
+
+          {/* Search: icon on mobile, expands full-width; always visible on desktop */}
+          {searchOpen ? (
+            <div className="flex-1 relative md:hidden">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search orders..."
+                autoFocus
+                className="pl-9 pr-9 py-4"
+              />
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(""); setSearchOpen(false); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 50); }}
+              className="md:hidden bg-printa-black flex items-center justify-center transition shrink-0"
+            >
+              <Search size={18} />
+            </Button>
+          )}
+          {/* Desktop: always visible */}
+          <div className="hidden md:block relative w-64 shrink-0">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search orders..."
+              className="pl-9 pr-9 py-4"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── Channel pill switch ── */}
