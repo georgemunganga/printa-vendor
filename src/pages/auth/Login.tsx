@@ -9,6 +9,7 @@ import { PhoneCall, Mail, ChevronDown, Check } from 'lucide-react';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { requestLoginOtp } from "@/mock-api/auth";
 import { fetchGoogleUserProfile } from "@/lib/google-auth";
+import { isGoogleAuthConfigured } from "@/lib/auth-config";
 
 const countryCodes = [
   { code: '+260', country: 'Zambia', flag: '🇿🇲' },
@@ -172,7 +173,7 @@ const Login = () => {
   });
 
   const handleGoogleSignIn = () => {
-    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+    if (!isGoogleAuthConfigured) {
       toast.error("Google auth is not configured. Set VITE_GOOGLE_CLIENT_ID.");
       return;
     }

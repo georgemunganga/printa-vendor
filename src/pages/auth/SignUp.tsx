@@ -20,6 +20,7 @@ import {
 } from "@/lib/vendorOnboardingState";
 import { requestSignupOtp, verifySignupOtp } from "@/mock-api/auth";
 import { fetchGoogleUserProfile } from "@/lib/google-auth";
+import { isGoogleAuthConfigured } from "@/lib/auth-config";
 
 const countryCodes = [
   { code: '+260', country: 'Zambia', flag: '🇿🇲' },
@@ -225,7 +226,7 @@ const SignUp = () => {
   });
 
   const handleGoogleSignUp = () => {
-    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+    if (!isGoogleAuthConfigured) {
       toast.error("Google auth is not configured. Set VITE_GOOGLE_CLIENT_ID.");
       return;
     }

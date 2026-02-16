@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import type { Permission, UserRole } from "@/types";
 import { ROLE_PERMISSIONS } from "@/lib/permissions";
+import { GOOGLE_CLIENT_ID } from "@/lib/auth-config";
 import { MOCK_STORES, type MembershipLike } from "@/mock-api/stores";
 import {
   clearMockSession,
@@ -46,7 +47,7 @@ interface AuthContextValue {
 }
 
 const REFRESH_POLL_INTERVAL_MS = 30 * 1000;
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
+const GOOGLE_PROVIDER_CLIENT_ID = GOOGLE_CLIENT_ID || "missing-google-client-id";
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -228,12 +229,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [user, isAuthenticated, setActiveStoreScopeHandler, activeStoreScope]
   );
 
-  if (!GOOGLE_CLIENT_ID) {
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-  }
-
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+    <GoogleOAuthProvider clientId={GOOGLE_PROVIDER_CLIENT_ID}>
       <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
     </GoogleOAuthProvider>
   );
