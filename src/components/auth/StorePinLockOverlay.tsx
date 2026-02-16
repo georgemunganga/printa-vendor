@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Check, ChevronRight, Delete, LockKeyhole } from "lucide-react";
+import { Check, ChevronRight, Delete, Lock, LockKeyhole } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { useStore } from "@/context/store-context";
@@ -185,8 +185,10 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
       <div className="absolute inset-0 grid grid-cols-1 lg:grid-cols-[340px_1fr]">
         <div className="bg-white/95 border-r border-gray-200 p-4 overflow-y-auto">
           <div className="mb-4">
-            <p className="text-xs uppercase tracking-wide text-gray-400">Store Locked</p>
-            <h2 className="text-lg font-semibold text-gray-900">{activeStore.name}</h2>
+            <p className="inline-flex items-center text-xs font-semibold px-3 border bg-black rounded-full text-white p-2 text-gray-400 mb-2">
+              <Lock className="w-4 h-4 mr-1" /> Store Locked
+            </p>
+            <h2 className="text-4xl dashboard-page-title text-gray-900">{activeStore.name}</h2>
             <p className="text-xs text-gray-500 mt-1">Enter PIN to continue</p>
           </div>
           {signedInEmployee && (
@@ -201,11 +203,10 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
                   setPinInput("");
                   setIsWrong(false);
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition ${
-                  selectedId === signedInEmployee.id
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition ${selectedId === signedInEmployee.id
                     ? "border-printa-red bg-printa-red/5"
                     : "border-gray-200 hover:bg-gray-50"
-                }`}
+                  }`}
               >
                 <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold">
                   {signedInEmployee.avatar}
@@ -244,9 +245,8 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
                         setPinInput("");
                         setIsWrong(false);
                       }}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition ${
-                        isSelected ? "border-printa-red bg-printa-red/5" : "border-gray-200 hover:bg-gray-50"
-                      }`}
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition ${isSelected ? "border-printa-red bg-printa-red/5" : "border-gray-200 hover:bg-gray-50"
+                        }`}
                     >
                       <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold">
                         {emp.avatar}
@@ -269,10 +269,10 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
                 setActiveStore(null);
                 navigate("/dashboard/stores", { replace: true });
               }}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+              className="w-full  transition"
             >
               Back to Stores
-            </  Button>
+            </Button>
           </div>
         </div>
 
@@ -290,9 +290,8 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
               {dots.map((filled, idx) => (
                 <div
                   key={idx}
-                  className={`h-3 w-3 rounded-full transition-all ${
-                    isWrong ? "bg-red-400" : filled ? "bg-gray-900" : "bg-gray-200"
-                  }`}
+                  className={`h-3 w-3 rounded-full transition-all ${isWrong ? "bg-red-400" : filled ? "bg-gray-900" : "bg-gray-200"
+                    }`}
                 />
               ))}
             </div>

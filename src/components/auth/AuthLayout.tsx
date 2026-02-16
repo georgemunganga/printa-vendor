@@ -19,8 +19,8 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
       >
         <div className="w-full max-w-md">
           {/* Logo */}
-          <Link to="/" className="inline-block mb-10">
-            <img src="/printa-logo-red.webp" alt="Printa" className="h-8" />
+          <Link to="/" className="inline-block mb-6 md:mb-10">
+            <img src="/printa-logo-red.webp" alt="Printa" className="h-14" />
           </Link>
 
           {children}

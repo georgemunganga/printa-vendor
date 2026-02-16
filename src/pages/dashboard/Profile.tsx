@@ -161,7 +161,7 @@ const ProfilePage = () => {
               {/* Edit Button */}
               <button
                 onClick={() => navigate("/dashboard/profile/edit")}
-                className="self-start bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors flex items-center gap-2"
+                className="absolute right-0 lg:relative self-start bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors flex items-center gap-2"
               >
                 <Edit3 className="w-4 h-4" />
                 <span className="hidden md:inline">Edit Profile</span>

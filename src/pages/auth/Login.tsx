@@ -246,7 +246,7 @@ const Login = () => {
             <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>
             <div className="flex items-center">
               <CountryCodeDropdown value={countryCode} onChange={setCountryCode} />
-              <Input id="phone" type="tel" placeholder="97X XXX XXX" className="rounded-l-none rounded-r-xl" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} required />
+              <Input id="phone" type="tel" placeholder="97X XXX XXX" className="rounded-l-none rounded-r-xl " value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} required />
             </div>
           </div>
         ) : (

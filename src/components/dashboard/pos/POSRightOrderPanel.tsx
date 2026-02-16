@@ -115,15 +115,15 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
       }}
       title={`Complete ${paymentMethod === "cash" ? "Cash" : paymentMethod === "card" ? "Card" : "E-Wallet"} Payment`}
     >
-      <div className="space-y-6">
+      <div className="space-y-6 my-4">
         {/* Cash Payment */}
         {paymentMethod === "cash" && (
           <div className="space-y-6">
-            <div className="bg-gradient-to-br from-printa-red to-printa-red rounded-3xl p-4 text-white text-center">
+            <div className="bg-gradient-to-br from-printa-red to-printa-red rounded-2xl p-4 text-white text-center">
               <div className="text-sm font-semibold uppercase tracking-wider opacity-80 mb-2">
                 Bill Total
               </div>
-              <div className="text-6xl font-bold mb-2">
+              <div className="text-5xl font-bold mb-2">
                 K{total.toFixed(2)}
               </div>
               <div className="text-sm opacity-80">
@@ -141,7 +141,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
                 value={cashReceived}
                 onChange={(e) => setCashReceived(e.target.value)}
                 placeholder="0.00"
-                className="h-14 text-2xl font-semibold text-center"
+                className="h-14 text-3xl font-semibold text-center"
                 step="0.01"
                 min={total}
               />
