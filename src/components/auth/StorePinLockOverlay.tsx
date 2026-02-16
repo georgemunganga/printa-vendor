@@ -5,7 +5,7 @@ import { useAuth } from "@/context/auth-context";
 import { useStore } from "@/context/store-context";
 import { listMockDirectoryUsers } from "@/mock-api/auth";
 import { Button } from "@/components/ui/button";
-Button
+
 type UnlockMap = Record<string, true>;
 
 type Employee = {
@@ -67,6 +67,7 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
   const [unlockMap, setUnlockMap] = useState<UnlockMap>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAssignedProfiles, setShowAssignedProfiles] = useState(false);
+  const [mobileView, setMobileView] = useState<"pin" | "list">("pin");
   const [pinInput, setPinInput] = useState("");
   const [isWrong, setIsWrong] = useState(false);
 
@@ -178,30 +179,201 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
     setIsWrong(false);
   };
 
+  const selectEmployee = (employeeId: string, openMobilePinPad = false) => {
+    setSelectedId(employeeId);
+    setPinInput("");
+    setIsWrong(false);
+    if (openMobilePinPad) {
+      setMobileView("pin");
+    }
+  };
+
   const dots = Array.from({ length: 4 }, (_, idx) => idx < pinInput.length);
+
+  const pinPadContent = (
+    <>
+      <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-4">
+        <LockKeyhole size={24} className="text-gray-400" />
+      </div>
+      <p className="text-center text-sm text-gray-500 mb-1">Signed in as</p>
+      <p className="text-center text-lg font-semibold text-gray-900 mb-6">
+        {selectedEmployee?.name ?? user.name}
+      </p>
+
+      <div className="flex justify-center gap-3 mb-6">
+        {dots.map((filled, idx) => (
+          <div
+            key={idx}
+            className={`h-3 w-3 rounded-full transition-all ${isWrong ? "bg-red-400" : filled ? "bg-gray-900" : "bg-gray-200"}`}
+          />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
+          <button
+            key={digit}
+            type="button"
+            onClick={() => handleDigit(String(digit))}
+            className="h-12 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-semibold"
+          >
+            {digit}
+          </button>
+        ))}
+        <div />
+        <button
+          type="button"
+          onClick={() => handleDigit("0")}
+          className="h-12 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-semibold"
+        >
+          0
+        </button>
+        <button
+          type="button"
+          onClick={handleBackspace}
+          className="h-12 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-600 flex items-center justify-center"
+        >
+          <Delete size={18} />
+        </button>
+      </div>
+      {pinInput.length === 4 && !isWrong && (
+        <div className="mt-4 flex items-center justify-center gap-2 text-emerald-600 text-sm font-medium">
+          <Check size={16} />
+          Unlocked
+        </div>
+      )}
+    </>
+  );
+
+  const employeeList = (
+    <>
+      {signedInEmployee && (
+        <div className="mb-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">
+            Currently Signed In
+          </p>
+          <button
+            type="button"
+            onClick={() => selectEmployee(signedInEmployee.id, true)}
+            className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition ${selectedId === signedInEmployee.id
+                ? "border-printa-red bg-printa-red/5"
+                : "border-gray-200 hover:bg-gray-50"
+              }`}
+          >
+            <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold">
+              {signedInEmployee.avatar}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{signedInEmployee.name}</p>
+              <p className="text-xs text-gray-400">{signedInEmployee.role}</p>
+            </div>
+            <ChevronRight size={16} className="text-gray-300" />
+          </button>
+        </div>
+      )}
+      <div className="space-y-2">
+        {assignedProfiles.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAssignedProfiles((prev) => !prev)}
+            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+          >
+            {showAssignedProfiles ? "Hide Worker Profiles" : "Login as Worker Profile"}
+          </button>
+        )}
+        {showAssignedProfiles && (
+          <>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">
+              Assigned To This Store
+            </p>
+            {assignedProfiles.map((emp) => {
+              const isSelected = emp.id === selectedId;
+              return (
+                <button
+                  key={emp.id}
+                  type="button"
+                  onClick={() => selectEmployee(emp.id, true)}
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition ${isSelected ? "border-printa-red bg-printa-red/5" : "border-gray-200 hover:bg-gray-50"
+                    }`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold">
+                    {emp.avatar}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{emp.name}</p>
+                    <p className="text-xs text-gray-400">{emp.role}</p>
+                  </div>
+                  <ChevronRight size={16} className="text-gray-300" />
+                </button>
+              );
+            })}
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  const handleMobileSelectEmployee = (employeeId: string) => {
+    setSelectedId(employeeId);
+    setPinInput("");
+    setIsWrong(false);
+    setMobileView("pin");
+  };
+
+  const handleMobileBack = () => {
+    setMobileView("list");
+    setPinInput("");
+    setIsWrong(false);
+  };
+
+  const backToStores = () => {
+    setActiveStore(null);
+    navigate("/dashboard/stores", { replace: true });
+  };
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/45 backdrop-blur-sm">
-      <div className="absolute inset-0 grid grid-cols-1 lg:grid-cols-[340px_1fr]">
-        <div className="bg-white/95 border-r border-gray-200 p-4 overflow-y-auto">
-          <div className="mb-4">
-            <p className="inline-flex items-center text-xs font-semibold px-3 border bg-black rounded-full text-white p-2 text-gray-400 mb-2">
-              <Lock className="w-4 h-4 mr-1" /> Store Locked
-            </p>
-            <h2 className="text-4xl dashboard-page-title text-gray-900">{activeStore.name}</h2>
-            <p className="text-xs text-gray-500 mt-1">Enter PIN to continue</p>
+      {/* ── Mobile layout ── */}
+      <div className="lg:hidden absolute inset-0 flex flex-col bg-white/95">
+        {/* Header */}
+        <div className="p-4 pb-2 shrink-0">
+          <p className="inline-flex items-center text-xs font-semibold px-3 border bg-black rounded-full text-white p-2 mb-2">
+            <Lock className="w-4 h-4 mr-1" /> Store Locked
+          </p>
+          <h2 className="text-3xl dashboard-page-title text-gray-900">{activeStore.name}</h2>
+        </div>
+
+        {/* Profile switcher chip */}
+        <div className="px-4 pb-3 shrink-0">
+          <div className="flex items-center gap-2 p-2 rounded-xl bg-gray-50 border border-gray-200">
+            <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold">
+              {selectedEmployee?.avatar ?? "?"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{selectedEmployee?.name ?? user.name}</p>
+              <p className="text-[10px] text-gray-400">{selectedEmployee?.role ?? "Owner"}</p>
+            </div>
+            {assignedProfiles.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setMobileView((prev) => prev === "pin" ? "list" : "pin")}
+                className="text-xs font-medium text-printa-red px-2 py-1 rounded-lg hover:bg-printa-red/5 transition"
+              >
+                {mobileView === "pin" ? "Switch" : "Done"}
+              </button>
+            )}
           </div>
-          {signedInEmployee && (
-            <div className="mb-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">
-                Currently Signed In
-              </p>
+        </div>
+
+        {/* Content area - takes remaining space */}
+        {mobileView === "list" ? (
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 space-y-2 pb-4">
+            {signedInEmployee && (
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedId(signedInEmployee.id);
-                  setPinInput("");
-                  setIsWrong(false);
+                  handleMobileSelectEmployee(signedInEmployee.id);
+                  setMobileView("pin");
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition ${selectedId === signedInEmployee.id
                     ? "border-printa-red bg-printa-red/5"
@@ -217,118 +389,68 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
                 </div>
                 <ChevronRight size={16} className="text-gray-300" />
               </button>
-            </div>
-          )}
-          <div className="space-y-2">
-            {assignedProfiles.length > 0 && (
+            )}
+            {assignedProfiles.map((emp) => (
               <button
+                key={emp.id}
                 type="button"
-                onClick={() => setShowAssignedProfiles((prev) => !prev)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+                onClick={() => {
+                  handleMobileSelectEmployee(emp.id);
+                  setMobileView("pin");
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition ${emp.id === selectedId ? "border-printa-red bg-printa-red/5" : "border-gray-200 hover:bg-gray-50"
+                  }`}
               >
-                {showAssignedProfiles ? "Hide Worker Profiles" : "Login as Worker Profile"}
+                <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold">
+                  {emp.avatar}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{emp.name}</p>
+                  <p className="text-xs text-gray-400">{emp.role}</p>
+                </div>
+                <ChevronRight size={16} className="text-gray-300" />
               </button>
-            )}
-            {showAssignedProfiles && (
-              <>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">
-                  Assigned To This Store
-                </p>
-                {assignedProfiles.map((emp) => {
-                  const isSelected = emp.id === selectedId;
-                  return (
-                    <button
-                      key={emp.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedId(emp.id);
-                        setPinInput("");
-                        setIsWrong(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition ${isSelected ? "border-printa-red bg-printa-red/5" : "border-gray-200 hover:bg-gray-50"
-                        }`}
-                    >
-                      <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold">
-                        {emp.avatar}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{emp.name}</p>
-                        <p className="text-xs text-gray-400">{emp.role}</p>
-                      </div>
-                      <ChevronRight size={16} className="text-gray-300" />
-                    </button>
-                  );
-                })}
-              </>
-            )}
+            ))}
           </div>
-          <div className="mt-6 pt-4 border-t border-gray-200">
-            <Button
-              type="button"
-              onClick={() => {
-                setActiveStore(null);
-                navigate("/dashboard/stores", { replace: true });
-              }}
-              className="w-full  transition"
-            >
+        ) : (
+          <div className="flex-1 flex items-center justify-center px-6">
+            <div className="w-full max-w-xs">
+              {pinPadContent}
+            </div>
+          </div>
+        )}
+
+        {/* Bottom button - always visible */}
+        <div className="p-4 border-t border-gray-200 shrink-0">
+          <Button type="button" onClick={backToStores} className="w-full transition">
+            Back to Stores
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Desktop layout ── */}
+      <div className="hidden lg:grid absolute inset-0 grid-cols-[340px_1fr]">
+        <div className="bg-white/95 border-r border-gray-200 p-4 flex h-full min-h-0 flex-col">
+          <div className="mb-4 shrink-0">
+            <p className="inline-flex items-center text-xs font-semibold px-3 border bg-black rounded-full text-white p-2 mb-2">
+              <Lock className="w-4 h-4 mr-1" /> Store Locked
+            </p>
+            <h2 className="text-4xl dashboard-page-title text-gray-900">{activeStore.name}</h2>
+            <p className="text-xs text-gray-500 mt-1">Enter PIN to continue</p>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
+            {employeeList}
+          </div>
+          <div className="mt-auto pt-4 border-t border-gray-200 shrink-0">
+            <Button type="button" onClick={backToStores} className="w-full transition">
               Back to Stores
             </Button>
           </div>
         </div>
 
-        <div className="hidden lg:flex items-center justify-center">
+        <div className="flex items-center justify-center">
           <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl border border-gray-100">
-            <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-4">
-              <LockKeyhole size={24} className="text-gray-400" />
-            </div>
-            <p className="text-center text-sm text-gray-500 mb-1">Signed in as</p>
-            <p className="text-center text-lg font-semibold text-gray-900 mb-6">
-              {selectedEmployee?.name ?? user.name}
-            </p>
-
-            <div className="flex justify-center gap-3 mb-6">
-              {dots.map((filled, idx) => (
-                <div
-                  key={idx}
-                  className={`h-3 w-3 rounded-full transition-all ${isWrong ? "bg-red-400" : filled ? "bg-gray-900" : "bg-gray-200"
-                    }`}
-                />
-              ))}
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
-                <button
-                  key={digit}
-                  type="button"
-                  onClick={() => handleDigit(String(digit))}
-                  className="h-12 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-semibold"
-                >
-                  {digit}
-                </button>
-              ))}
-              <div />
-              <button
-                type="button"
-                onClick={() => handleDigit("0")}
-                className="h-12 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-semibold"
-              >
-                0
-              </button>
-              <button
-                type="button"
-                onClick={handleBackspace}
-                className="h-12 rounded-2xl bg-gray-50 hover:bg-gray-100 text-gray-600 flex items-center justify-center"
-              >
-                <Delete size={18} />
-              </button>
-            </div>
-            {pinInput.length === 4 && !isWrong && (
-              <div className="mt-4 flex items-center justify-center gap-2 text-emerald-600 text-sm font-medium">
-                <Check size={16} />
-                Unlocked
-              </div>
-            )}
+            {pinPadContent}
           </div>
         </div>
       </div>
