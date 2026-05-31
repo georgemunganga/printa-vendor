@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundaryProvider } from "@/components/ErrorBoundaryProvider";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { Preloader } from "@/components/Preloader";
@@ -48,9 +48,9 @@ import { NotificationProvider } from "@/context/notification-context";
 import { JobProvider } from "@/context/job-context";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { StorePinLockOverlay } from "@/components/auth/StorePinLockOverlay";
+import { queryClient } from "@/query";
 
 const PRELOADER_MIN_VISIBLE_MS = 500;
-const queryClient = new QueryClient();
 
 const RouteAwareStoreLock = () => {
   const location = useLocation();
