@@ -10,6 +10,8 @@ import { AuthLayout } from '@/components/auth/AuthLayout';
 import { requestLoginOtp } from "@/mock-api/auth";
 import { fetchGoogleUserProfile } from "@/lib/google-auth";
 import { isGoogleAuthConfigured } from "@/lib/auth-config";
+import { useAuth } from "@/context/auth-context";
+import { getApiErrorMessage } from "@/lib/api";
 
 const countryCodes = [
   { code: '+260', country: 'Zambia', flag: '🇿🇲' },
@@ -108,10 +110,13 @@ const Login = () => {
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [countryCode, setCountryCode] = useState(countryCodes[0]);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
+  const { loginWithApi } = useAuth();
 
-  const handleSendOTP = (e: React.FormEvent) => {
+  const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (loginMethod === 'phone') {
@@ -134,16 +139,19 @@ const Login = () => {
         toast.error("Please enter a valid email address");
         return;
       }
-      const { challengeId } = requestLoginOtp("email", email);
-      toast.success("OTP sent to your email");
-      setTimeout(() => {
-        navigate(
-          `/otp?purpose=login&challenge=${encodeURIComponent(challengeId)}&method=email&value=${encodeURIComponent(email)}`
-        );
-      }, 400);
+      if (!password) {
+        toast.error("Please enter your password");
+        return;
+      }
+      setIsPasswordLoading(true);
+      await loginWithApi(email, password);
+      toast.success("Logged in successfully");
+      navigate("/dashboard/stores");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to send OTP";
+      const message = getApiErrorMessage(error, "Unable to log in");
       toast.error(message);
+    } finally {
+      setIsPasswordLoading(false);
     }
   };
 
@@ -259,11 +267,21 @@ const Login = () => {
               </div>
               <Input id="email" type="email" placeholder="you@example.com" className="rounded-l-none rounded-r-xl" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5 mt-4">Password</label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="Your password"
+              className="rounded-xl"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           </div>
         )}
 
-        <Button type="submit" className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold">
-          Send OTP
+        <Button type="submit" disabled={isPasswordLoading} className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold">
+          {loginMethod === "email" ? (isPasswordLoading ? "Logging in..." : "Log In") : "Send OTP"}
         </Button>
       </form>
 

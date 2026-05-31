@@ -12,6 +12,7 @@ import {
   restoreMockSession,
   type MockAuthSession,
 } from "@/mock-api/auth";
+import { apiAuthSessionService } from "@/services/auth-session.service";
 
 export interface StoreMembership extends MembershipLike {
   title?: string;
@@ -35,7 +36,9 @@ export interface AuthUser {
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  isAuthLoading: boolean;
   login: (user: AuthUser) => void;
+  loginWithApi: (email: string, password: string) => Promise<void>;
   logout: () => void;
   updateUser: (updates: Partial<AuthUser>) => void;
   setActiveStoreScope: (storeId: string | null) => void;
@@ -138,6 +141,7 @@ const getEffectiveRoleAndPermissions = (
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<MockAuthSession | null>(() => restoreMockSession());
+  const [isRestoringApiSession, setIsRestoringApiSession] = useState(true);
   const [activeStoreScope, setActiveStoreScope] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return localStorage.getItem("printa_active_store_id");
@@ -157,10 +161,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSession(nextSession);
   };
 
+  const loginWithApi = async (email: string, password: string) => {
+    const apiUser = await apiAuthSessionService.login(email, password);
+    login(apiUser);
+  };
+
   const logout = () => {
     setSession(null);
     setActiveStoreScope(null);
     clearMockSession();
+    apiAuthSessionService.logout();
     if (typeof window !== "undefined") {
       localStorage.removeItem("printa_active_store_id");
     }
@@ -186,6 +196,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isOwner = (): boolean => effectiveAccess.role === "owner";
   const isManager = (): boolean => effectiveAccess.role === "manager";
   const isStaff = (): boolean => effectiveAccess.role === "staff";
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (session) return;
+        const apiUser = await apiAuthSessionService.restore();
+        if (!cancelled && apiUser) {
+          login(apiUser);
+        }
+      } finally {
+        if (!cancelled) setIsRestoringApiSession(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!session || typeof window === "undefined") return;
@@ -216,7 +245,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     () => ({
       user,
       isAuthenticated,
+      isAuthLoading: isRestoringApiSession,
       login,
+      loginWithApi,
       logout,
       updateUser,
       setActiveStoreScope: setActiveStoreScopeHandler,
@@ -226,7 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isManager,
       isStaff,
     }),
-    [user, isAuthenticated, setActiveStoreScopeHandler, activeStoreScope]
+    [user, isAuthenticated, isRestoringApiSession, setActiveStoreScopeHandler, activeStoreScope]
   );
 
   return (

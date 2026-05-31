@@ -22,6 +22,8 @@ Acceptance:
 
 ## Phase 1: Auth
 
+Status: in progress.
+
 Goal: replace mock login/register/session with backend auth.
 
 Scope:
@@ -31,12 +33,16 @@ Scope:
 - Persist bearer token through `apiSessionStore`.
 - Keep role and permission mapping at the app boundary.
 - Add logout token cleanup.
+- Keep phone/Google OTP behind the existing mock adapter until backend OTP endpoints exist.
+- Require explicit vendor onboarding data consent before account creation.
 
 Acceptance:
 
 - Login errors surface cleanly.
 - Protected routes depend on real session state.
 - Refresh behavior is explicit. If backend has no refresh endpoint, do not fake one.
+- Email/password registration creates a backend user and starts an API session.
+- Onboarding cannot complete until consent checkboxes are accepted.
 
 ## Phase 2: Stores And Vendor Profile
 

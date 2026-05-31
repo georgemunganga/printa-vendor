@@ -27,9 +27,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiresAny = false,
   routeScope = "store",
 }) => {
-  const { isAuthenticated, user, can } = useAuth();
+  const { isAuthenticated, isAuthLoading, user, can } = useAuth();
   const { isHydrating, isStoreSelected, needsStoreSelection } = useStore();
   const location = useLocation();
+
+  if (isAuthLoading) {
+    return null;
+  }
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" state={{ from: location }} replace />;

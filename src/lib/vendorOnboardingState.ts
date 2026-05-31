@@ -32,6 +32,8 @@ export interface VendorOnboardingState {
   // Step 5: How do you get paid?
   paymentMethod: "bank" | "mobile_money" | "";
   paymentDetail: string; // account number or phone number
+  dataConsentAccepted: boolean;
+  platformTermsAccepted: boolean;
 
   lastUpdatedAt: string | null;
 }
@@ -63,6 +65,8 @@ const defaultState: VendorOnboardingState = {
   products: [],
   paymentMethod: "",
   paymentDetail: "",
+  dataConsentAccepted: false,
+  platformTermsAccepted: false,
   lastUpdatedAt: null,
 };
 

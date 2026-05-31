@@ -21,6 +21,8 @@ import {
 import { requestSignupOtp, verifySignupOtp } from "@/mock-api/auth";
 import { fetchGoogleUserProfile } from "@/lib/google-auth";
 import { isGoogleAuthConfigured } from "@/lib/auth-config";
+import { authService } from "@/services/auth.service";
+import { getApiErrorMessage } from "@/lib/api";
 
 const countryCodes = [
   { code: '+260', country: 'Zambia', flag: '🇿🇲' },
@@ -114,16 +116,19 @@ const GoogleIcon = () => (
 
 const SignUp = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithApi } = useAuth();
   const [step, setStep] = useState<'info' | 'otp'>('info');
   const [name, setName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
   const [otp, setOtp] = useState('');
   const [challengeId, setChallengeId] = useState("");
   const [countryCode, setCountryCode] = useState(countryCodes[0]);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
 
   useEffect(() => {
     if (!isOnboardingComplete()) {
@@ -131,7 +136,7 @@ const SignUp = () => {
     }
   }, [navigate]);
 
-  const handleSendOTP = (e: React.FormEvent) => {
+  const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!name.trim()) {
@@ -149,9 +154,35 @@ const SignUp = () => {
         toast.error("Please enter a valid email address");
         return;
       }
+      if (password.length < 8) {
+        toast.error("Password must be at least 8 characters");
+        return;
+      }
+      if (password !== confirmPassword) {
+        toast.error("Passwords do not match");
+        return;
+      }
     }
 
     try {
+      if (loginMethod === "email") {
+        setIsCreatingAccount(true);
+        const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
+        await authService.register({
+          email,
+          password,
+          first_name: firstName,
+          last_name: lastNameParts.join(" "),
+          role: "VENDOR",
+        });
+        await loginWithApi(email, password);
+        clearOnboardingState();
+        clearOnboardingComplete();
+        toast.success("Account created successfully!");
+        navigate('/dashboard/stores');
+        return;
+      }
+
       const value = loginMethod === "phone" ? `${countryCode.code}${phoneNumber}` : email;
       const { challengeId: nextChallenge } = requestSignupOtp({
         name: name.trim(),
@@ -162,8 +193,10 @@ const SignUp = () => {
       toast.success(`OTP sent to your ${loginMethod === 'phone' ? 'phone number' : 'email address'}`);
       setStep('otp');
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to send OTP";
+      const message = getApiErrorMessage(error, "Unable to create account");
       toast.error(message);
+    } finally {
+      setIsCreatingAccount(false);
     }
   };
 
@@ -347,11 +380,31 @@ const SignUp = () => {
                     required
                   />
                 </div>
+                <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 mb-1.5 mt-4">Password</label>
+                <Input
+                  id="signup-password"
+                  type="password"
+                  placeholder="At least 8 characters"
+                  className="rounded-xl"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <label htmlFor="signup-confirm-password" className="block text-sm font-medium text-gray-700 mb-1.5 mt-4">Confirm Password</label>
+                <Input
+                  id="signup-confirm-password"
+                  type="password"
+                  placeholder="Repeat password"
+                  className="rounded-xl"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
               </div>
             )}
 
-            <Button type="submit" className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold">
-              Create Account
+            <Button type="submit" disabled={isCreatingAccount} className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold">
+              {loginMethod === "email" ? (isCreatingAccount ? "Creating Account..." : "Create Account") : "Send OTP"}
             </Button>
           </form>
 

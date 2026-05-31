@@ -138,7 +138,11 @@ const VendorOnboarding: React.FC = () => {
       case 2: return data.storeName.trim().length >= 2 && data.storeAddress.trim().length >= 2;
       case 3: return Object.values(data.storeHours).some((h) => h.enabled);
       case 4: return data.products.length > 0;
-      case 5: return data.paymentMethod !== "" && data.paymentDetail.trim().length >= 4;
+      case 5:
+        return data.paymentMethod !== "" &&
+          data.paymentDetail.trim().length >= 4 &&
+          data.dataConsentAccepted &&
+          data.platformTermsAccepted;
       default: return false;
     }
   };
@@ -932,6 +936,32 @@ const VendorOnboarding: React.FC = () => {
                       />
                     </motion.div>
                   )}
+
+                  <div className="mt-5 space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={data.dataConsentAccepted}
+                        onChange={(e) => set({ dataConsentAccepted: e.target.checked })}
+                        className="mt-1 h-4 w-4 rounded border-gray-300 text-printa-red focus:ring-printa-red"
+                      />
+                      <span className="text-sm text-gray-600">
+                        I consent to Printa collecting and processing my business, store, contact, payment, and operational data to create my vendor account, verify my store, route jobs, process payments, and provide platform support.
+                      </span>
+                    </label>
+
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={data.platformTermsAccepted}
+                        onChange={(e) => set({ platformTermsAccepted: e.target.checked })}
+                        className="mt-1 h-4 w-4 rounded border-gray-300 text-printa-red focus:ring-printa-red"
+                      />
+                      <span className="text-sm text-gray-600">
+                        I confirm the information provided is accurate and agree to Printa's vendor onboarding, payment, and service quality requirements.
+                      </span>
+                    </label>
+                  </div>
                 </div>
               )}
             </motion.div>
