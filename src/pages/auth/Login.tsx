@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { toast } from "sonner";
 import { PhoneCall, Mail } from 'lucide-react';
 import { AuthLayout } from '@/components/auth/AuthLayout';
-import { useAuth } from "@/context/auth-context";
 import { getApiErrorMessage } from "@/lib/api";
 import { authService } from "@/services/auth.service";
 
@@ -24,36 +23,42 @@ const Login = () => {
   const navigate = useNavigate();
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
-  const { loginWithApi } = useAuth();
+  const [isOtpLoading, setIsOtpLoading] = useState(false);
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (loginMethod === 'phone') {
-        toast.info("Phone OTP will be enabled after SMS provider keys are configured.");
-        return;
-      }
-
-      if (!email || !email.includes('@')) {
+      const contact = loginMethod === "email" ? email.trim() : phone.trim();
+      if (loginMethod === 'email' && (!contact || !contact.includes('@'))) {
         toast.error("Please enter a valid email address");
         return;
       }
-      if (!password) {
-        toast.error("Please enter your password");
+      if (loginMethod === 'phone' && contact.replace(/\D/g, '').length < 9) {
+        toast.error("Please enter a valid phone number");
         return;
       }
-      setIsPasswordLoading(true);
-      await loginWithApi(email, password);
-      toast.success("Logged in successfully");
-      navigate("/dashboard/stores");
+      setIsOtpLoading(true);
+      const challenge = await authService.requestOtp({
+        purpose: "login",
+        method: loginMethod,
+        ...(loginMethod === "email" ? { email: contact } : { phone: normalizePhone(contact) }),
+      });
+      toast.success("Verification code sent");
+      navigate("/otp", {
+        state: {
+          mode: "login",
+          challenge,
+          contact: challenge.destination,
+          method: challenge.method,
+        },
+      });
     } catch (error) {
-      const message = getApiErrorMessage(error, "Unable to log in");
+      const message = getApiErrorMessage(error, "Unable to send verification code");
       toast.error(message);
     } finally {
-      setIsPasswordLoading(false);
+      setIsOtpLoading(false);
     }
   };
 
@@ -96,9 +101,10 @@ const Login = () => {
         <div className="flex rounded-xl border border-gray-200 bg-gray-50 p-1">
           <button
             type="button"
-            onClick={() => toast.info("Phone OTP will be enabled after SMS provider keys are configured.")}
-            className="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-gray-400 cursor-not-allowed"
-            aria-disabled="true"
+            onClick={() => setLoginMethod('phone')}
+            className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+              loginMethod === 'phone' ? 'bg-printa-red text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}
           >
             <div className="flex items-center justify-center gap-2">
               <PhoneCall className="h-4 w-4" />
@@ -123,7 +129,15 @@ const Login = () => {
       {/* Form */}
       <form onSubmit={handleSendOTP} className="space-y-5">
         {loginMethod === 'phone' ? (
-          <p className="text-sm text-gray-500">Phone OTP is not active yet.</p>
+          <div>
+            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>
+            <div className="flex items-center">
+              <div className="bg-gray-100 px-3 py-2 rounded-l-xl border border-r-0 border-gray-300 h-10 flex items-center">
+                <PhoneCall className="h-5 w-5 text-gray-400" />
+              </div>
+              <Input id="phone" type="tel" placeholder="097 000 0000" className="rounded-l-none rounded-r-xl" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+            </div>
+          </div>
         ) : (
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
@@ -133,21 +147,11 @@ const Login = () => {
               </div>
               <Input id="email" type="email" placeholder="you@example.com" className="rounded-l-none rounded-r-xl" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5 mt-4">Password</label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Your password"
-              className="rounded-xl"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
           </div>
         )}
 
-        <Button type="submit" disabled={isPasswordLoading} className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold">
-          {loginMethod === "email" ? (isPasswordLoading ? "Logging in..." : "Log In") : "Send OTP"}
+        <Button type="submit" disabled={isOtpLoading} className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold">
+          {isOtpLoading ? "Sending Code..." : "Send Verification Code"}
         </Button>
       </form>
 
@@ -157,6 +161,13 @@ const Login = () => {
       </p>
     </AuthLayout>
   );
+};
+
+const normalizePhone = (value: string) => {
+  const trimmed = value.trim().replace(/\s+/g, "");
+  if (trimmed.startsWith("+")) return trimmed;
+  if (trimmed.startsWith("0")) return `+260${trimmed.slice(1)}`;
+  return trimmed;
 };
 
 export default Login;

@@ -3,12 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from "sonner";
-import { User, PhoneCall, Mail } from 'lucide-react';
+import { User, Mail } from 'lucide-react';
 import { AuthLayout } from '@/components/auth/AuthLayout';
-import { useAuth } from "@/context/auth-context";
 import {
-  clearOnboardingComplete,
-  clearOnboardingState,
   isOnboardingComplete,
 } from "@/lib/vendorOnboardingState";
 import { authService } from "@/services/auth.service";
@@ -25,12 +22,8 @@ const GoogleIcon = () => (
 
 const SignUp = () => {
   const navigate = useNavigate();
-  const { loginWithApi } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('email');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
 
@@ -48,40 +41,33 @@ const SignUp = () => {
       return;
     }
 
-    if (loginMethod === 'phone') {
-      toast.info("Phone signup will be enabled after SMS provider keys are configured.");
-      return;
-    }
     if (!email.trim() || !email.includes('@')) {
       toast.error("Please enter a valid email address");
-      return;
-    }
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters");
-      return;
-    }
-    if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
       return;
     }
 
     try {
       setIsCreatingAccount(true);
       const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
-      await authService.register({
-        email,
-        password,
+      const challenge = await authService.requestOtp({
+        purpose: "signup",
+        method: "email",
+        email: email.trim(),
         first_name: firstName,
         last_name: lastNameParts.join(" "),
         role: "VENDOR",
       });
-      await loginWithApi(email, password);
-      clearOnboardingState();
-      clearOnboardingComplete();
-      toast.success("Account created successfully!");
-      navigate('/dashboard/stores');
+      toast.success("Verification code sent");
+      navigate("/otp", {
+        state: {
+          mode: "signup",
+          challenge,
+          contact: challenge.destination,
+          method: challenge.method,
+        },
+      });
     } catch (error) {
-      const message = getApiErrorMessage(error, "Unable to create account");
+      const message = getApiErrorMessage(error, "Unable to send verification code");
       toast.error(message);
     } finally {
       setIsCreatingAccount(false);
@@ -122,35 +108,6 @@ const SignUp = () => {
             </div>
           </div>
 
-          {/* Method Toggle */}
-          <div className="mb-5">
-            <div className="flex rounded-xl border border-gray-200 bg-gray-50 p-1">
-              <button
-                type="button"
-                onClick={() => toast.info("Phone signup will be enabled after SMS provider keys are configured.")}
-                className="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-gray-400 cursor-not-allowed"
-                aria-disabled="true"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <PhoneCall className="h-4 w-4" />
-                  Phone
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setLoginMethod('email')}
-                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                  loginMethod === 'email' ? 'bg-printa-red text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Mail className="h-4 w-4" />
-                  Email
-                </div>
-              </button>
-            </div>
-          </div>
-
           {/* Form */}
           <form onSubmit={handleSendOTP} className="space-y-5">
             <div>
@@ -171,50 +128,26 @@ const SignUp = () => {
               </div>
             </div>
 
-            {loginMethod === 'phone' ? (
-              <p className="text-sm text-gray-500">Phone signup is not active yet.</p>
-            ) : (
-              <div>
-                <label htmlFor="contact" className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
-                <div className="flex items-center">
-                  <div className="bg-gray-100 px-3 py-2 rounded-l-xl border border-r-0 border-gray-300 h-10 flex items-center">
-                    <Mail className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <Input
-                    id="contact"
-                    type="email"
-                    placeholder="you@example.com"
-                    className="rounded-l-none rounded-r-xl"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
+            <div>
+              <label htmlFor="contact" className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
+              <div className="flex items-center">
+                <div className="bg-gray-100 px-3 py-2 rounded-l-xl border border-r-0 border-gray-300 h-10 flex items-center">
+                  <Mail className="h-5 w-5 text-gray-400" />
                 </div>
-                <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 mb-1.5 mt-4">Password</label>
                 <Input
-                  id="signup-password"
-                  type="password"
-                  placeholder="At least 8 characters"
-                  className="rounded-xl"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-                <label htmlFor="signup-confirm-password" className="block text-sm font-medium text-gray-700 mb-1.5 mt-4">Confirm Password</label>
-                <Input
-                  id="signup-confirm-password"
-                  type="password"
-                  placeholder="Repeat password"
-                  className="rounded-xl"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  id="contact"
+                  type="email"
+                  placeholder="you@example.com"
+                  className="rounded-l-none rounded-r-xl"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
-            )}
+            </div>
 
             <Button type="submit" disabled={isCreatingAccount} className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold">
-              {loginMethod === "email" ? (isCreatingAccount ? "Creating Account..." : "Create Account") : "Send OTP"}
+              {isCreatingAccount ? "Sending Code..." : "Send Verification Code"}
             </Button>
           </form>
 

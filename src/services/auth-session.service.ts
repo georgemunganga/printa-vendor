@@ -77,6 +77,11 @@ export const apiAuthSessionService = {
     return buildAuthUserFromApiToken(session.token);
   },
 
+  async completeOtp(token: string, tokenType = "Bearer") {
+    authService.setSession(token, tokenType);
+    return buildAuthUserFromApiToken(token);
+  },
+
   async completeOAuth(token: string, tokenType = "Bearer") {
     authService.setSession(token, tokenType);
     return buildAuthUserFromApiToken(token);

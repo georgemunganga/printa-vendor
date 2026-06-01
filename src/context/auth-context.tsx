@@ -39,6 +39,7 @@ interface AuthContextValue {
   isAuthLoading: boolean;
   login: (user: AuthUser) => void;
   loginWithApi: (email: string, password: string) => Promise<void>;
+  completeOtpLogin: (token: string, tokenType?: string) => Promise<void>;
   completeOAuthLogin: (token: string, tokenType?: string) => Promise<void>;
   logout: () => void;
   updateUser: (updates: Partial<AuthUser>) => void;
@@ -167,6 +168,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login(apiUser);
   };
 
+  const completeOtpLogin = async (token: string, tokenType = "Bearer") => {
+    const apiUser = await apiAuthSessionService.completeOtp(token, tokenType);
+    login(apiUser);
+  };
+
   const completeOAuthLogin = async (token: string, tokenType = "Bearer") => {
     const apiUser = await apiAuthSessionService.completeOAuth(token, tokenType);
     login(apiUser);
@@ -254,6 +260,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthLoading: isRestoringApiSession,
       login,
       loginWithApi,
+      completeOtpLogin,
       completeOAuthLogin,
       logout,
       updateUser,
