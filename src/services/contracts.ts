@@ -56,6 +56,12 @@ export interface OtpChallengeResponseDto {
   destination: string;
   expires_in_seconds: number;
   delivery_status: string;
+  deliveries?: Array<{
+    method: OtpMethodDto;
+    destination: string;
+    status: string;
+    error?: string;
+  }>;
 }
 
 export interface OtpVerifyRequestDto {
