@@ -67,22 +67,49 @@ const OTPVerificationPage = () => {
     return () => window.clearInterval(interval);
   }, [timer]);
 
-  const handleOtpChange = (digit: string, index: number) => {
-    if (!/^\d?$/.test(digit)) return;
+  const applyOtpDigits = (value: string, startIndex = 0) => {
+    const digits = value.replace(/\D/g, "");
+    if (!digits) return;
 
     const updatedOtp = [...otp];
-    updatedOtp[index] = digit;
+    let nextIndex = startIndex
+
+    for (const digit of digits) {
+      if (nextIndex >= INPUT_LENGTH) break;
+      updatedOtp[nextIndex] = digit;
+      nextIndex += 1;
+    }
+
     setOtp(updatedOtp);
 
-    if (digit && index < INPUT_LENGTH - 1) {
-      inputRefs.current[index + 1]?.focus();
+    if (nextIndex >= INPUT_LENGTH) {
+      inputRefs.current[INPUT_LENGTH - 1]?.focus();
+      return;
     }
+    inputRefs.current[nextIndex]?.focus();
+  };
+
+  const handleOtpChange = (value: string, index: number) => {
+    const digits = value.replace(/\D/g, "");
+    if (!digits) {
+      const updatedOtp = [...otp];
+      updatedOtp[index] = "";
+      setOtp(updatedOtp);
+      return;
+    }
+
+    applyOtpDigits(digits, index);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, index: number) => {
     if (event.key === "Backspace" && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
+  };
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>, index: number) => {
+    event.preventDefault();
+    applyOtpDigits(event.clipboardData.getData("text"), index);
   };
 
   const handleVerifyOTP = async () => {
@@ -179,6 +206,7 @@ const OTPVerificationPage = () => {
               inputRefs.current[index] = element;
             }}
             onChange={(event) => handleOtpChange(event.target.value, index)}
+            onPaste={(event) => handlePaste(event, index)}
             onKeyDown={(event) => handleKeyDown(event, index)}
             disabled={isVerifying || isResending}
           />
