@@ -422,7 +422,7 @@ const VendorOnboarding: React.FC = () => {
                       <img
                         src="/printa-logo-red.webp"
                         alt="Printa"
-                        className="h-18 w-auto object-contain drop-shadow-[0_8px_20px_rgba(239,68,68,0.25)] transition-opacity duration-200 ease-in-out lg:h-20"
+                        className="h-11 w-auto object-contain drop-shadow-[0_8px_20px_rgba(239,68,68,0.25)] transition-opacity duration-200 ease-in-out sm:h-14 lg:h-20"
                       />
                     </Link>
                   </motion.div>
