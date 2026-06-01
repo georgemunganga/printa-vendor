@@ -64,7 +64,7 @@ const Login = () => {
 
   const handleGoogleSignIn = () => {
     setIsGoogleLoading(true);
-    window.location.assign(authService.googleOAuthStartUrl());
+    window.location.assign(authService.googleOAuthStartUrl({ mode: "login" }));
   };
 
   return (

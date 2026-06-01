@@ -76,7 +76,7 @@ const SignUp = () => {
 
   const handleGoogleSignUp = () => {
     setIsGoogleLoading(true);
-    window.location.assign(authService.googleOAuthStartUrl({ role: "VENDOR" }));
+    window.location.assign(authService.googleOAuthStartUrl({ mode: "signup", role: "VENDOR" }));
   };
 
   return (

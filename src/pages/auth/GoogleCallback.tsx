@@ -12,6 +12,12 @@ const GoogleCallback = () => {
     let cancelled = false;
     void (async () => {
       const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const oauthError = params.get("error");
+      if (oauthError) {
+        toast.error(oauthError);
+        navigate("/signup", { replace: true });
+        return;
+      }
       const token = params.get("token");
       const tokenType = params.get("token_type") || "Bearer";
       if (!token) {
