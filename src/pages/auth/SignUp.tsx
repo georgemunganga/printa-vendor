@@ -1,106 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from "sonner";
-import { User, PhoneCall, Mail, ChevronDown, Check, ArrowLeft } from 'lucide-react';
+import { User, PhoneCall, Mail } from 'lucide-react';
 import { AuthLayout } from '@/components/auth/AuthLayout';
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
 import { useAuth } from "@/context/auth-context";
 import {
   clearOnboardingComplete,
   clearOnboardingState,
   isOnboardingComplete,
 } from "@/lib/vendorOnboardingState";
-import { requestSignupOtp, verifySignupOtp } from "@/mock-api/auth";
 import { authService } from "@/services/auth.service";
 import { getApiErrorMessage } from "@/lib/api";
-
-const countryCodes = [
-  { code: '+260', country: 'Zambia', flag: '🇿🇲' },
-  { code: '+254', country: 'Kenya', flag: '🇰🇪' },
-  { code: '+255', country: 'Tanzania', flag: '🇹🇿' },
-  { code: '+256', country: 'Uganda', flag: '🇺🇬' },
-  { code: '+251', country: 'Ethiopia', flag: '🇪🇹' },
-  { code: '+250', country: 'Rwanda', flag: '🇷🇼' },
-  { code: '+1', country: 'United States', flag: '🇺🇸' },
-  { code: '+44', country: 'United Kingdom', flag: '🇬🇧' },
-  { code: '+27', country: 'South Africa', flag: '🇿🇦' },
-  { code: '+234', country: 'Nigeria', flag: '🇳🇬' },
-  { code: '+233', country: 'Ghana', flag: '🇬🇭' },
-];
-
-const CountryCodeDropdown: React.FC<{
-  value: typeof countryCodes[0];
-  onChange: (country: typeof countryCodes[0]) => void;
-}> = ({ value, onChange }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  return (
-    <div ref={dropdownRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-l-xl border border-r-0 border-gray-300 h-10 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-printa-red focus:border-transparent"
-      >
-        <span className="text-lg">{value.flag}</span>
-        <span className="font-semibold">{value.code}</span>
-        <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.15 }}
-            className="absolute top-full left-0 mt-1 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 max-h-64 overflow-y-auto"
-          >
-            {countryCodes.map((country) => (
-              <button
-                key={country.code}
-                type="button"
-                onClick={() => {
-                  onChange(country);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors ${
-                  value.code === country.code ? 'bg-printa-red/5' : ''
-                }`}
-              >
-                <span className="text-xl">{country.flag}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{country.country}</p>
-                  <p className="text-xs text-gray-500">{country.code}</p>
-                </div>
-                {value.code === country.code && (
-                  <Check className="h-4 w-4 text-printa-red flex-shrink-0" />
-                )}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
 
 const GoogleIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -113,17 +25,12 @@ const GoogleIcon = () => (
 
 const SignUp = () => {
   const navigate = useNavigate();
-  const { login, loginWithApi } = useAuth();
-  const [step, setStep] = useState<'info' | 'otp'>('info');
+  const { loginWithApi } = useAuth();
   const [name, setName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
-  const [otp, setOtp] = useState('');
-  const [challengeId, setChallengeId] = useState("");
-  const [countryCode, setCountryCode] = useState(countryCodes[0]);
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('email');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
 
@@ -142,87 +49,42 @@ const SignUp = () => {
     }
 
     if (loginMethod === 'phone') {
-      if (!phoneNumber || phoneNumber.length < 9) {
-        toast.error("Please enter a valid phone number");
-        return;
-      }
-    } else {
-      if (!email.trim() || !email.includes('@')) {
-        toast.error("Please enter a valid email address");
-        return;
-      }
-      if (password.length < 8) {
-        toast.error("Password must be at least 8 characters");
-        return;
-      }
-      if (password !== confirmPassword) {
-        toast.error("Passwords do not match");
-        return;
-      }
+      toast.info("Phone signup will be enabled after SMS provider keys are configured.");
+      return;
+    }
+    if (!email.trim() || !email.includes('@')) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
     }
 
     try {
-      if (loginMethod === "email") {
-        setIsCreatingAccount(true);
-        const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
-        await authService.register({
-          email,
-          password,
-          first_name: firstName,
-          last_name: lastNameParts.join(" "),
-          role: "VENDOR",
-        });
-        await loginWithApi(email, password);
-        clearOnboardingState();
-        clearOnboardingComplete();
-        toast.success("Account created successfully!");
-        navigate('/dashboard/stores');
-        return;
-      }
-
-      const value = loginMethod === "phone" ? `${countryCode.code}${phoneNumber}` : email;
-      const { challengeId: nextChallenge } = requestSignupOtp({
-        name: name.trim(),
-        method: loginMethod,
-        value,
+      setIsCreatingAccount(true);
+      const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
+      await authService.register({
+        email,
+        password,
+        first_name: firstName,
+        last_name: lastNameParts.join(" "),
+        role: "VENDOR",
       });
-      setChallengeId(nextChallenge);
-      toast.success(`OTP sent to your ${loginMethod === 'phone' ? 'phone number' : 'email address'}`);
-      setStep('otp');
+      await loginWithApi(email, password);
+      clearOnboardingState();
+      clearOnboardingComplete();
+      toast.success("Account created successfully!");
+      navigate('/dashboard/stores');
     } catch (error) {
       const message = getApiErrorMessage(error, "Unable to create account");
       toast.error(message);
     } finally {
       setIsCreatingAccount(false);
-    }
-  };
-
-  const contactLabel = loginMethod === 'phone' ? `${countryCode.code} ${phoneNumber}` : email;
-
-  const handleVerifyOTP = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (otp.length !== 6) {
-      toast.error("Please enter the complete 6-digit OTP");
-      return;
-    }
-
-    if (!challengeId) {
-      toast.error("Sign up session expired. Please request OTP again.");
-      setStep("info");
-      return;
-    }
-
-    try {
-      const user = verifySignupOtp(challengeId, otp);
-      login(user);
-      clearOnboardingState();
-      clearOnboardingComplete();
-      toast.success("Account created successfully!");
-      setTimeout(() => navigate('/dashboard/stores'), 700);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "OTP verification failed";
-      toast.error(message);
     }
   };
 
@@ -233,8 +95,7 @@ const SignUp = () => {
 
   return (
     <AuthLayout>
-      {step === 'info' ? (
-        <>
+      <>
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-gray-900 mb-1">Create an Account</h1>
             <p className="text-sm text-gray-500">Sign up to start using our printing services</p>
@@ -266,10 +127,9 @@ const SignUp = () => {
             <div className="flex rounded-xl border border-gray-200 bg-gray-50 p-1">
               <button
                 type="button"
-                onClick={() => setLoginMethod('phone')}
-                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                  loginMethod === 'phone' ? 'bg-printa-red text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                }`}
+                onClick={() => toast.info("Phone signup will be enabled after SMS provider keys are configured.")}
+                className="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-gray-400 cursor-not-allowed"
+                aria-disabled="true"
               >
                 <div className="flex items-center justify-center gap-2">
                   <PhoneCall className="h-4 w-4" />
@@ -312,21 +172,7 @@ const SignUp = () => {
             </div>
 
             {loginMethod === 'phone' ? (
-              <div>
-                <label htmlFor="contact" className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>
-                <div className="flex items-center">
-                  <CountryCodeDropdown value={countryCode} onChange={setCountryCode} />
-                  <Input
-                    id="contact"
-                    type="tel"
-                    placeholder="97X XXX XXX"
-                    className="rounded-l-none rounded-r-xl"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
+              <p className="text-sm text-gray-500">Phone signup is not active yet.</p>
             ) : (
               <div>
                 <label htmlFor="contact" className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
@@ -376,64 +222,7 @@ const SignUp = () => {
             Already have an account?{' '}
             <Link to="/login" className="text-printa-red hover:underline font-semibold">Log in</Link>
           </p>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            className="flex items-center gap-2 text-sm text-gray-500 mb-6 hover:text-gray-700 transition-colors"
-            onClick={() => setStep('info')}
-          >
-            <ArrowLeft size={16} />
-            Back
-          </button>
-
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Verify OTP</h1>
-            <p className="text-sm text-gray-500">
-              Enter the 6-digit code sent to <span className="font-semibold text-gray-900">{contactLabel}</span>
-            </p>
-            <Button
-              type="button"
-              className="text-printa-red text-sm mt-1 hover:underline font-medium"
-              onClick={() => setStep('info')}
-            >
-              Change {loginMethod === 'phone' ? 'number' : 'email'}
-            </Button>
-          </div>
-
-          <form onSubmit={handleVerifyOTP}>
-            <div className="flex justify-center py-4 mb-6">
-              <InputOTP
-                maxLength={6}
-                value={otp}
-                onChange={(value) => setOtp(value)}
-                render={({ slots }) => (
-                  <InputOTPGroup className="gap-2">
-                    {slots.map((slot, index) => (
-                      <InputOTPSlot
-                        key={index}
-                        index={index}
-                        className="w-10 h-12 text-center text-lg border-gray-300 focus:border-printa-red focus:ring-printa-red rounded-xl"
-                      />
-                    ))}
-                  </InputOTPGroup>
-                )}
-              />
-            </div>
-
-            <Button type="submit" className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold mb-4">
-              Verify & Create Account
-            </Button>
-          </form>
-
-          <div className="text-center text-sm text-gray-500">
-            <button type="button" className="text-printa-red font-semibold hover:underline">
-              Resend OTP
-            </button>
-          </div>
-        </>
-      )}
+      </>
     </AuthLayout>
   );
 };

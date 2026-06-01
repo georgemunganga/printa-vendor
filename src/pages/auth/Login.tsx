@@ -1,98 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from "sonner";
-import { PhoneCall, Mail, ChevronDown, Check } from 'lucide-react';
+import { PhoneCall, Mail } from 'lucide-react';
 import { AuthLayout } from '@/components/auth/AuthLayout';
-import { requestLoginOtp } from "@/mock-api/auth";
 import { useAuth } from "@/context/auth-context";
 import { getApiErrorMessage } from "@/lib/api";
 import { authService } from "@/services/auth.service";
 
-const countryCodes = [
-  { code: '+260', country: 'Zambia', flag: '🇿🇲' },
-  { code: '+254', country: 'Kenya', flag: '🇰🇪' },
-  { code: '+255', country: 'Tanzania', flag: '🇹🇿' },
-  { code: '+256', country: 'Uganda', flag: '🇺🇬' },
-  { code: '+251', country: 'Ethiopia', flag: '🇪🇹' },
-  { code: '+250', country: 'Rwanda', flag: '🇷🇼' },
-  { code: '+1', country: 'United States', flag: '🇺🇸' },
-  { code: '+44', country: 'United Kingdom', flag: '🇬🇧' },
-  { code: '+27', country: 'South Africa', flag: '🇿🇦' },
-  { code: '+234', country: 'Nigeria', flag: '🇳🇬' },
-  { code: '+233', country: 'Ghana', flag: '🇬🇭' },
-];
-
 type LoginMethod = 'phone' | 'email';
-
-const CountryCodeDropdown: React.FC<{
-  value: typeof countryCodes[0];
-  onChange: (country: typeof countryCodes[0]) => void;
-}> = ({ value, onChange }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  return (
-    <div ref={dropdownRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-l-xl border border-r-0 border-gray-300 h-10 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-printa-red focus:border-transparent"
-      >
-        <span className="text-lg">{value.flag}</span>
-        <span className="font-semibold">{value.code}</span>
-        <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.15 }}
-            className="absolute top-full left-0 mt-1 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 max-h-64 overflow-y-auto"
-          >
-            {countryCodes.map((country) => (
-              <button
-                key={country.code}
-                type="button"
-                onClick={() => {
-                  onChange(country);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors ${
-                  value.code === country.code ? 'bg-printa-red/5' : ''
-                }`}
-              >
-                <span className="text-xl">{country.flag}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{country.country}</p>
-                  <p className="text-xs text-gray-500">{country.code}</p>
-                </div>
-                {value.code === country.code && (
-                  <Check className="h-4 w-4 text-printa-red flex-shrink-0" />
-                )}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
 
 const GoogleIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -105,11 +22,9 @@ const GoogleIcon = () => (
 
 const Login = () => {
   const navigate = useNavigate();
-  const [loginMethod, setLoginMethod] = useState<LoginMethod>('phone');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [countryCode, setCountryCode] = useState(countryCodes[0]);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
   const { loginWithApi } = useAuth();
@@ -118,18 +33,7 @@ const Login = () => {
     e.preventDefault();
     try {
       if (loginMethod === 'phone') {
-        if (!phoneNumber || phoneNumber.length < 9) {
-          toast.error("Please enter a valid phone number");
-          return;
-        }
-        const value = `${countryCode.code}${phoneNumber}`;
-        const { challengeId } = requestLoginOtp("phone", value);
-        toast.success("OTP sent to your phone");
-        setTimeout(() => {
-          navigate(
-            `/otp?purpose=login&challenge=${encodeURIComponent(challengeId)}&method=phone&value=${encodeURIComponent(value)}`
-          );
-        }, 400);
+        toast.info("Phone OTP will be enabled after SMS provider keys are configured.");
         return;
       }
 
@@ -192,10 +96,9 @@ const Login = () => {
         <div className="flex rounded-xl border border-gray-200 bg-gray-50 p-1">
           <button
             type="button"
-            onClick={() => setLoginMethod('phone')}
-            className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              loginMethod === 'phone' ? 'bg-printa-red text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
-            }`}
+            onClick={() => toast.info("Phone OTP will be enabled after SMS provider keys are configured.")}
+            className="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-gray-400 cursor-not-allowed"
+            aria-disabled="true"
           >
             <div className="flex items-center justify-center gap-2">
               <PhoneCall className="h-4 w-4" />
@@ -220,13 +123,7 @@ const Login = () => {
       {/* Form */}
       <form onSubmit={handleSendOTP} className="space-y-5">
         {loginMethod === 'phone' ? (
-          <div>
-            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>
-            <div className="flex items-center">
-              <CountryCodeDropdown value={countryCode} onChange={setCountryCode} />
-              <Input id="phone" type="tel" placeholder="97X XXX XXX" className="rounded-l-none rounded-r-xl " value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} required />
-            </div>
-          </div>
+          <p className="text-sm text-gray-500">Phone OTP is not active yet.</p>
         ) : (
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
