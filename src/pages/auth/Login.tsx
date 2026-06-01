@@ -30,20 +30,20 @@ const Login = () => {
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const contact = loginMethod === "email" ? email.trim() : phone.trim();
+      const contact = loginMethod === "email" ? email.trim() : phone;
       if (loginMethod === 'email' && (!contact || !contact.includes('@'))) {
         toast.error("Please enter a valid email address");
         return;
       }
-      if (loginMethod === 'phone' && contact.replace(/\D/g, '').length < 9) {
-        toast.error("Please enter a valid phone number");
+      if (loginMethod === 'phone' && contact.length !== 9) {
+        toast.error("Please enter the 9 digits after +260");
         return;
       }
       setIsOtpLoading(true);
       const challenge = await authService.requestOtp({
         purpose: "login",
         method: loginMethod,
-        ...(loginMethod === "email" ? { email: contact } : { phone: normalizePhone(contact) }),
+        ...(loginMethod === "email" ? { email: contact } : { phone: `+260${contact}` }),
       });
       toast.success("Verification code sent");
       navigate("/otp", {
@@ -135,7 +135,20 @@ const Login = () => {
               <div className="bg-gray-100 px-3 py-2 rounded-l-xl border border-r-0 border-gray-300 h-10 flex items-center">
                 <PhoneCall className="h-5 w-5 text-gray-400" />
               </div>
-              <Input id="phone" type="tel" placeholder="097 000 0000" className="rounded-l-none rounded-r-xl" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+              <div className="bg-gray-100 px-3 py-2 border border-r-0 border-gray-300 h-10 flex items-center text-sm font-semibold text-gray-700">
+                +260
+              </div>
+              <Input
+                id="phone"
+                type="tel"
+                inputMode="numeric"
+                maxLength={9}
+                placeholder="972827372"
+                className="rounded-l-none rounded-r-xl"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 9))}
+                required
+              />
             </div>
           </div>
         ) : (
@@ -161,13 +174,6 @@ const Login = () => {
       </p>
     </AuthLayout>
   );
-};
-
-const normalizePhone = (value: string) => {
-  const trimmed = value.trim().replace(/\s+/g, "");
-  if (trimmed.startsWith("+")) return trimmed;
-  if (trimmed.startsWith("0")) return `+260${trimmed.slice(1)}`;
-  return trimmed;
 };
 
 export default Login;
