@@ -39,6 +39,7 @@ interface AuthContextValue {
   isAuthLoading: boolean;
   login: (user: AuthUser) => void;
   loginWithApi: (email: string, password: string) => Promise<void>;
+  completeOAuthLogin: (token: string, tokenType?: string) => Promise<void>;
   logout: () => void;
   updateUser: (updates: Partial<AuthUser>) => void;
   setActiveStoreScope: (storeId: string | null) => void;
@@ -166,6 +167,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login(apiUser);
   };
 
+  const completeOAuthLogin = async (token: string, tokenType = "Bearer") => {
+    const apiUser = await apiAuthSessionService.completeOAuth(token, tokenType);
+    login(apiUser);
+  };
+
   const logout = () => {
     setSession(null);
     setActiveStoreScope(null);
@@ -248,6 +254,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthLoading: isRestoringApiSession,
       login,
       loginWithApi,
+      completeOAuthLogin,
       logout,
       updateUser,
       setActiveStoreScope: setActiveStoreScopeHandler,

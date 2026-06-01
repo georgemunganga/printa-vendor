@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { useGoogleLogin } from "@react-oauth/google";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from "sonner";
@@ -19,8 +18,6 @@ import {
   isOnboardingComplete,
 } from "@/lib/vendorOnboardingState";
 import { requestSignupOtp, verifySignupOtp } from "@/mock-api/auth";
-import { fetchGoogleUserProfile } from "@/lib/google-auth";
-import { isGoogleAuthConfigured } from "@/lib/auth-config";
 import { authService } from "@/services/auth.service";
 import { getApiErrorMessage } from "@/lib/api";
 
@@ -229,42 +226,9 @@ const SignUp = () => {
     }
   };
 
-  const googleSignUp = useGoogleLogin({
-    scope: "openid email profile",
-    onSuccess: (tokenResponse) => {
-      void (async () => {
-        try {
-          const profile = await fetchGoogleUserProfile(tokenResponse.access_token);
-          const { challengeId: nextChallenge } = requestSignupOtp({
-            name: profile.name,
-            method: "email",
-            value: profile.email,
-          });
-          toast.success("Google account linked. Verify OTP to continue.");
-          navigate(
-            `/otp?purpose=signup&challenge=${encodeURIComponent(nextChallenge)}&method=email&value=${encodeURIComponent(profile.email)}`
-          );
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Unable to start Google sign-up";
-          toast.error(message);
-        } finally {
-          setIsGoogleLoading(false);
-        }
-      })();
-    },
-    onError: () => {
-      setIsGoogleLoading(false);
-      toast.error("Google authentication failed.");
-    },
-  });
-
   const handleGoogleSignUp = () => {
-    if (!isGoogleAuthConfigured) {
-      toast.error("Google auth is not configured. Set VITE_GOOGLE_CLIENT_ID.");
-      return;
-    }
     setIsGoogleLoading(true);
-    googleSignUp();
+    window.location.assign(authService.googleOAuthStartUrl());
   };
 
   return (

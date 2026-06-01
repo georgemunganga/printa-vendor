@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import { apiSessionStore } from "@/lib/api/session";
+import { apiUrl } from "@/config/env";
 import type {
   LoginRequestDto,
   LoginResponseDto,
@@ -38,11 +39,24 @@ export const authService = {
     return session;
   },
 
+  googleOAuthStartUrl(redirectUri = `${window.location.origin}/auth/google/callback`) {
+    const url = new URL(apiUrl("/api/v1/auth/google/start"));
+    url.searchParams.set("redirect_uri", redirectUri);
+    return url.toString();
+  },
+
   logout() {
     apiSessionStore.clear();
   },
 
   getSession() {
     return apiSessionStore.get();
+  },
+
+  setSession(token: string, tokenType = "Bearer") {
+    apiSessionStore.set({
+      accessToken: token,
+      tokenType,
+    });
   },
 };
