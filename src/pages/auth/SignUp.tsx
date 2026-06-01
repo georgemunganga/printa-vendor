@@ -228,7 +228,7 @@ const SignUp = () => {
 
   const handleGoogleSignUp = () => {
     setIsGoogleLoading(true);
-    window.location.assign(authService.googleOAuthStartUrl());
+    window.location.assign(authService.googleOAuthStartUrl({ role: "VENDOR" }));
   };
 
   return (

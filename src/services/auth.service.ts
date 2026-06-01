@@ -39,9 +39,13 @@ export const authService = {
     return session;
   },
 
-  googleOAuthStartUrl(redirectUri = `${window.location.origin}/auth/google/callback`) {
+  googleOAuthStartUrl(options: { redirectUri?: string; role?: "CUSTOMER" | "VENDOR" } = {}) {
+    const redirectUri = options.redirectUri || `${window.location.origin}/auth/google/callback`;
     const url = new URL(apiUrl("/api/v1/auth/google/start"));
     url.searchParams.set("redirect_uri", redirectUri);
+    if (options.role) {
+      url.searchParams.set("role", options.role);
+    }
     return url.toString();
   },
 
