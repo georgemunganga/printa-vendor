@@ -2,6 +2,14 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { PhoneCall, Mail } from 'lucide-react';
 import { AuthLayout } from '@/components/auth/AuthLayout';
@@ -26,6 +34,7 @@ const Login = () => {
   const [phone, setPhone] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isOtpLoading, setIsOtpLoading] = useState(false);
+  const [showSignupPrompt, setShowSignupPrompt] = useState(false);
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +71,10 @@ const Login = () => {
       });
     } catch (error) {
       const message = getApiErrorMessage(error, "Unable to send verification code");
+      if (message.toLowerCase().includes("user not found")) {
+        setShowSignupPrompt(true);
+        return;
+      }
       toast.error(message);
     } finally {
       setIsOtpLoading(false);
@@ -178,6 +191,33 @@ const Login = () => {
         Don't have an account?{' '}
         <Link to="/onboarding" className="text-printa-red hover:underline font-semibold">Sign up</Link>
       </p>
+
+      <Dialog open={showSignupPrompt} onOpenChange={setShowSignupPrompt}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Account not found</DialogTitle>
+            <DialogDescription>
+              We could not find an account with those details. Create your vendor account first, then return to login.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowSignupPrompt(false)}
+            >
+              Try Again
+            </Button>
+            <Button
+              type="button"
+              className="bg-printa-red hover:bg-red-700 text-white"
+              onClick={() => navigate("/onboarding")}
+            >
+              Sign Up
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AuthLayout>
   );
 };
