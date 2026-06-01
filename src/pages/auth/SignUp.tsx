@@ -49,14 +49,15 @@ const SignUp = () => {
     try {
       setIsCreatingAccount(true);
       const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
-      const challenge = await authService.requestOtp({
+      const requestPayload = {
         purpose: "signup",
         method: "email",
         email: email.trim(),
         first_name: firstName,
         last_name: lastNameParts.join(" "),
         role: "VENDOR",
-      });
+      } as const;
+      const challenge = await authService.requestOtp(requestPayload);
       toast.success("Verification code sent");
       navigate("/otp", {
         state: {
@@ -64,6 +65,7 @@ const SignUp = () => {
           challenge,
           contact: challenge.destination,
           method: challenge.method,
+          requestPayload,
         },
       });
     } catch (error) {

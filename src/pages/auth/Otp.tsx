@@ -1,140 +1,212 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { ArrowLeft, Mail, PhoneCall } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { AuthLayout } from "@/components/auth/AuthLayout";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/auth-context";
+import { toast } from "sonner";
+import { AuthLayout } from "@/components/auth/AuthLayout";
 import { getApiErrorMessage } from "@/lib/api";
-import {
-  clearOnboardingComplete,
-  clearOnboardingState,
-} from "@/lib/vendorOnboardingState";
+import { clearOnboardingComplete, clearOnboardingState } from "@/lib/vendorOnboardingState";
 import { authService } from "@/services/auth.service";
-import type { OtpChallengeResponseDto, OtpMethodDto } from "@/services/contracts";
+import type { OtpChallengeResponseDto, OtpMethodDto, OtpRequestDto } from "@/services/contracts";
+
+const INPUT_LENGTH = 6;
 
 type OTPRouteState = {
   mode?: "login" | "signup";
   challenge?: OtpChallengeResponseDto;
   contact?: string;
   method?: OtpMethodDto;
+  requestPayload?: OtpRequestDto;
 };
 
 const OTPVerificationPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { completeOtpLogin } = useAuth();
-  const state = (location.state || {}) as OTPRouteState;
-  const [code, setCode] = useState("");
+  const initialState = (location.state || {}) as OTPRouteState;
+  const [challenge, setChallenge] = useState(initialState.challenge);
+  const [otp, setOtp] = useState(Array(INPUT_LENGTH).fill(""));
+  const [timer, setTimer] = useState(30);
+  const [canResend, setCanResend] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
-  const deliveries = state.challenge?.deliveries?.filter((delivery) => delivery.status === "SENT") ?? [];
+  const mode = initialState.mode;
+  const isLoginFlow = mode === "login";
+  const isSignupFlow = mode === "signup";
+
   const deliveryLabel = useMemo(() => {
+    const deliveries = challenge?.deliveries?.filter((delivery) => delivery.status === "SENT") ?? [];
     if (deliveries.length > 1) {
       return deliveries.map((delivery) => delivery.destination).join(" and ");
     }
-    return state.contact || state.challenge?.destination || "your contact";
-  }, [deliveries, state.challenge?.destination, state.contact]);
+    return initialState.contact || challenge?.destination || "your contact";
+  }, [challenge?.deliveries, challenge?.destination, initialState.contact]);
 
-  const hasPhoneDelivery = deliveries.some((delivery) => delivery.method === "phone") || state.method === "phone";
-
-  const handleVerify = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!state.challenge?.challenge_id) {
-      toast.error("Start again to request a new verification code");
+  useEffect(() => {
+    if ((!isLoginFlow && !isSignupFlow) || !challenge?.challenge_id) {
+      toast.error("Invalid OTP session. Please login again.");
       navigate("/login", { replace: true });
       return;
     }
-    if (code.length !== 6) {
-      toast.error("Enter the 6-digit verification code");
+  }, [challenge?.challenge_id, isLoginFlow, isSignupFlow, navigate]);
+
+  useEffect(() => {
+    if (timer === 0) {
+      setCanResend(true);
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setTimer((prev) => prev - 1);
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [timer]);
+
+  const handleOtpChange = (digit: string, index: number) => {
+    if (!/^\d?$/.test(digit)) return;
+
+    const updatedOtp = [...otp];
+    updatedOtp[index] = digit;
+    setOtp(updatedOtp);
+
+    if (digit && index < INPUT_LENGTH - 1) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (event.key === "Backspace" && !otp[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    const code = otp.join("");
+    if (!challenge?.challenge_id) {
+      toast.error("Invalid OTP session. Please login again.");
+      navigate("/login", { replace: true });
+      return;
+    }
+    if (code.length !== INPUT_LENGTH) {
+      toast.error("Enter the full 6-digit code");
       return;
     }
 
     try {
       setIsVerifying(true);
       const session = await authService.verifyOtp({
-        challenge_id: state.challenge.challenge_id,
+        challenge_id: challenge.challenge_id,
         code,
       });
       await completeOtpLogin(session.token, session.token_type);
-      if (state.mode === "signup") {
+      if (isSignupFlow) {
         clearOnboardingState();
         clearOnboardingComplete();
       }
-      toast.success(state.mode === "signup" ? "Account created successfully" : "Logged in successfully");
+      toast.success("OTP verified");
       navigate("/dashboard/stores", { replace: true });
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Unable to verify code"));
+      toast.error(getApiErrorMessage(error, "OTP verification failed"));
     } finally {
       setIsVerifying(false);
     }
   };
 
-  if (!state.challenge?.challenge_id) {
-    return (
-      <AuthLayout>
-        <button
-          type="button"
-          className="flex items-center gap-2 text-sm text-gray-500 mb-6 hover:text-gray-700 transition-colors"
-          onClick={() => navigate("/login", { replace: true })}
-        >
-          <ArrowLeft size={16} />
-          Back to login
-        </button>
+  const handleResend = async () => {
+    if (!initialState.requestPayload) {
+      toast.error("Start again to request a new code");
+      navigate(isSignupFlow ? "/signup" : "/login", { replace: true });
+      return;
+    }
 
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Request a code</h1>
-          <p className="text-sm text-gray-500">Start from login or sign up to receive a verification code.</p>
-        </div>
-
-        <Button
-          type="button"
-          className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold"
-          onClick={() => navigate("/login", { replace: true })}
-        >
-          Continue to Login
-        </Button>
-      </AuthLayout>
-    );
-  }
+    try {
+      setIsResending(true);
+      const nextChallenge = await authService.requestOtp(initialState.requestPayload);
+      setChallenge(nextChallenge);
+      setTimer(30);
+      setCanResend(false);
+      setOtp(Array(INPUT_LENGTH).fill(""));
+      inputRefs.current[0]?.focus();
+      toast.success("OTP sent again");
+      navigate("/otp", {
+        replace: true,
+        state: {
+          ...initialState,
+          challenge: nextChallenge,
+          contact: nextChallenge.destination,
+          method: nextChallenge.method,
+        },
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Unable to resend OTP"));
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   return (
     <AuthLayout>
       <button
         type="button"
         className="flex items-center gap-2 text-sm text-gray-500 mb-6 hover:text-gray-700 transition-colors"
-        onClick={() => navigate(state.mode === "signup" ? "/signup" : "/login", { replace: true })}
+        onClick={() => navigate(-1)}
       >
         <ArrowLeft size={16} />
         Back
       </button>
 
       <div className="mb-8">
-        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-printa-red">
-          {hasPhoneDelivery ? <PhoneCall size={20} /> : <Mail size={20} />}
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Enter verification code</h1>
-        <p className="text-sm text-gray-500">We sent a 6-digit code to {deliveryLabel}.</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Verify OTP</h1>
+        <p className="text-sm text-gray-500">
+          Enter the 6-digit code sent to <span className="font-semibold text-gray-900">{deliveryLabel}</span>
+        </p>
       </div>
 
-      <form onSubmit={handleVerify} className="space-y-6">
-        <InputOTP maxLength={6} value={code} onChange={setCode} containerClassName="justify-center">
-          <InputOTPGroup>
-            {Array.from({ length: 6 }).map((_, index) => (
-              <InputOTPSlot key={index} index={index} className="h-11 w-11 text-base" />
-            ))}
-          </InputOTPGroup>
-        </InputOTP>
+      <div className="flex items-center justify-between gap-2 mb-6">
+        {otp.map((digit, index) => (
+          <Input
+            key={index}
+            inputMode="numeric"
+            maxLength={1}
+            value={digit}
+            className="h-14 text-center text-2xl font-semibold tracking-wide rounded-xl"
+            ref={(element) => {
+              inputRefs.current[index] = element;
+            }}
+            onChange={(event) => handleOtpChange(event.target.value, index)}
+            onKeyDown={(event) => handleKeyDown(event, index)}
+            disabled={isVerifying || isResending}
+          />
+        ))}
+      </div>
 
-        <Button
-          type="submit"
-          disabled={isVerifying}
-          className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold"
-        >
-          {isVerifying ? "Verifying..." : "Verify and Continue"}
-        </Button>
-      </form>
+      <Button
+        className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold mb-4"
+        onClick={handleVerifyOTP}
+        disabled={isVerifying || isResending}
+      >
+        {isVerifying ? "Verifying..." : "Verify OTP"}
+      </Button>
+
+      <div className="text-center text-sm text-gray-500">
+        {canResend ? (
+          <button
+            type="button"
+            className="text-printa-red font-semibold hover:underline"
+            onClick={handleResend}
+            disabled={isResending}
+          >
+            {isResending ? "Sending..." : "Resend OTP"}
+          </button>
+        ) : (
+          <span>Resend OTP in {timer}s</span>
+        )}
+      </div>
     </AuthLayout>
   );
 };

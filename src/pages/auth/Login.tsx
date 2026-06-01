@@ -45,6 +45,11 @@ const Login = () => {
         method: loginMethod,
         ...(loginMethod === "email" ? { email: contact } : { phone: `+260${contact}` }),
       });
+      const requestPayload = {
+        purpose: "login" as const,
+        method: loginMethod,
+        ...(loginMethod === "email" ? { email: contact } : { phone: `+260${contact}` }),
+      };
       toast.success("Verification code sent");
       navigate("/otp", {
         state: {
@@ -52,6 +57,7 @@ const Login = () => {
           challenge,
           contact: challenge.destination,
           method: challenge.method,
+          requestPayload,
         },
       });
     } catch (error) {
