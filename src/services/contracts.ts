@@ -36,6 +36,35 @@ export interface RegisterUserRequestDto {
   role: string;
 }
 
+export type OtpPurposeDto = "login" | "signup";
+export type OtpMethodDto = "email" | "phone";
+
+export interface OtpRequestDto {
+  purpose: OtpPurposeDto;
+  method: OtpMethodDto;
+  email?: string;
+  phone?: string;
+  password?: string;
+  first_name?: string;
+  last_name?: string;
+  role?: string;
+}
+
+export interface OtpChallengeResponseDto {
+  challenge_id: UUID;
+  method: OtpMethodDto;
+  destination: string;
+  expires_in_seconds: number;
+  delivery_status: string;
+}
+
+export interface OtpVerifyRequestDto {
+  challenge_id: UUID;
+  code: string;
+}
+
+export type OtpVerifyResponseDto = LoginResponseDto;
+
 export interface PlatformProductDto {
   id: UUID;
   name: string;
