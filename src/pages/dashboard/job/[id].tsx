@@ -79,6 +79,7 @@ const JobDetailsPage = () => {
     getSlaProgress,
   } = useJobContext();
   const order = getJobById(id);
+  const [showPreview, setShowPreview] = useState(false);
 
   if (!order) {
     return (
@@ -125,7 +126,6 @@ const JobDetailsPage = () => {
   };
 
   const statusIdx = TIMELINE_STEPS.findIndex((s) => s.key === order.status);
-  const [showPreview, setShowPreview] = useState(false);
 
   return (
     <DashboardLayout pageTitle={`Job ${order.id}`}>

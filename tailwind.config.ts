@@ -3,19 +3,6 @@ import { Config } from 'tailwindcss'
 import { fontFamily } from "tailwindcss/defaultTheme"
 import animatePlugin from 'tailwindcss-animate'
 
-// This type augmentation is required for the colors to be picked up by the extension
-type Colors = {
-  printa: {
-    red: string,
-    black: string,
-    gray: string,
-  }
-}
-
-declare module 'tailwindcss/types/config' {
-  interface CorePluginList extends CustomCorePluginList {}
-  interface ThemeConfig extends CustomThemeConfig {}
-}
 
 export default {
   darkMode: ["class"],

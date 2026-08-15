@@ -23,6 +23,21 @@ interface DeliverySuggestion {
   placeId?: string;
 }
 
+interface GeocodeResult {
+  place_id?: string;
+  formatted_address?: string;
+  geometry?: {
+    location?: {
+      lat?: number;
+      lng?: number;
+    };
+  };
+}
+
+interface GeocodeResponse {
+  results?: GeocodeResult[];
+}
+
 const Checkout = () => {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'delivery'>('pickup');
@@ -113,7 +128,7 @@ const Checkout = () => {
       });
       handleSelectLocation(nearest.id, { clearSearch: false });
     },
-    [handleSelectLocation]
+    [handleSelectLocation, locationOptions]
   );
 
   useEffect(() => {
@@ -169,10 +184,15 @@ const Checkout = () => {
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${key}`
       );
       if (!response.ok) throw new Error('Address lookup failed');
-      const data = await response.json();
-      if (!Array.isArray(data?.results)) return [];
-      const hits = data.results.filter((result: any) => result.geometry?.location);
-      return hits.slice(0, 4).map((result: any) => ({
+      const data = (await response.json()) as GeocodeResponse;
+      const results = data.results ?? [];
+      const hits = results.filter(
+        (result): result is GeocodeResult & { geometry: { location: { lat: number; lng: number } } } => {
+          const location = result.geometry?.location;
+          return typeof location?.lat === 'number' && typeof location.lng === 'number';
+        }
+      );
+      return hits.slice(0, 4).map((result) => ({
         id: result.place_id ?? `${result.geometry.location.lat}-${result.geometry.location.lng}`,
         address: result.formatted_address ?? query,
         lat: result.geometry.location.lat,

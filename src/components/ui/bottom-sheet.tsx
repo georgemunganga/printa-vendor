@@ -24,7 +24,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   const y = useMotionValue(0);
   const opacity = useTransform(y, [0, 300], [1, 0]);
 
-  const handleDragEnd = (_: any, info: PanInfo) => {
+  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     // Close if dragged down >150px or swiped fast downward
     if (info.offset.y > 150 || info.velocity.y > 500) {
       onClose();
@@ -102,7 +102,7 @@ export const BottomSheetSimple: React.FC<{
   const y = useMotionValue(0);
   const opacity = useTransform(y, [0, 300], [1, 0]);
 
-  const handleDragEnd = (_: any, info: PanInfo) => {
+  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.y > 150 || info.velocity.y > 500) {
       onClose();
     }

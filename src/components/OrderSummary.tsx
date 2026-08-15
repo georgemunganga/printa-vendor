@@ -68,6 +68,10 @@ export const OrderSummary: React.FC<OrderSummaryProps> = ({
     },
   };
 
+  const selectedPickupLocation = locationId
+    ? locations[locationId as keyof typeof locations]
+    : undefined;
+
   // Calculate total pages
   const totalPages = files.length * 5; // Assuming 5 pages per file for demo
 
@@ -179,8 +183,8 @@ export const OrderSummary: React.FC<OrderSummaryProps> = ({
                 <h3 className="font-medium text-sm mb-2">{isDelivery ? 'Delivery' : 'Pickup'}</h3>
                 {locationId && !isDelivery && (
                   <div className="text-xs sm:text-sm text-gray-600">
-                    <p className="font-medium">{(locations as any)[locationId]?.name}</p>
-                    <p className="truncate">{(locations as any)[locationId]?.address}</p>
+                    <p className="font-medium">{selectedPickupLocation?.name}</p>
+                    <p className="truncate">{selectedPickupLocation?.address}</p>
                   </div>
                 )}
                 {isDelivery && (

@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { GoogleMap, Marker, Polyline, useLoadScript } from '@react-google-maps/api';
+import { GoogleMap, Marker, Polyline, useLoadScript, type Libraries } from '@react-google-maps/api';
 import clsx from 'clsx';
 import { getApiKey } from '../../config/api-keys';
 import { Location } from '@/data/locations';
 
-const mapLibraries = ['places'] as const;
+const mapLibraries: Libraries = ['places'];
 
 const brandMapStyle = [
   {
@@ -84,7 +84,7 @@ const MapPicker: React.FC<MapPickerProps> = ({
 }) => {
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: getApiKey('GOOGLE_MAPS'),
-    libraries: mapLibraries as any,
+    libraries: mapLibraries,
   });
 
   const selectedLocation = useMemo(
