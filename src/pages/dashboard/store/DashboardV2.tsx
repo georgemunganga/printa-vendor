@@ -14,6 +14,7 @@ import { IncomingJobCard } from "@/components/dashboard/live-feed/IncomingJobCar
 import { ActiveJobCard } from "@/components/dashboard/live-feed/ActiveJobCard";
 import { useStore } from "@/context/store-context";
 import { scopeItemsByActiveStore } from "@/lib/store-scope";
+import { ordersService } from "@/services/orders.service";
 
 const addHistory = (job: PrintJob, status: PrintJobStatus) => {
   const history = job.statusHistory ? [...job.statusHistory] : [];
@@ -228,7 +229,12 @@ const DashboardV2: React.FC = () => {
   );
 
   const handleAccept = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      try {
+        await ordersService.updateStatus(id, "PRINTING");
+      } catch {
+        // Fallback local state if backend order is simulated/mock
+      }
       updateJob(id, (job) => {
         if (job.status !== "pending") return job;
         return {
@@ -244,7 +250,12 @@ const DashboardV2: React.FC = () => {
   );
 
   const handleReject = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      try {
+        await ordersService.cancel(id);
+      } catch {
+        // Fallback local state if simulated
+      }
       updateJob(id, (job) => ({
         ...job,
         status: "cancelled" as PrintJobStatus,
@@ -256,7 +267,12 @@ const DashboardV2: React.FC = () => {
   );
 
   const handleStartPrint = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      try {
+        await ordersService.updateStatus(id, "PRINTING");
+      } catch {
+        // Fallback
+      }
       updateJob(id, (job) => ({
         ...job,
         productionStartedAt: job.productionStartedAt ?? new Date(),
@@ -268,7 +284,13 @@ const DashboardV2: React.FC = () => {
   );
 
   const handleMarkReady = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      try {
+        const nextStatus = jobs.find((j) => j.id === id)?.status === "ready" ? "COMPLETED" : "READY";
+        await ordersService.updateStatus(id, nextStatus as OrderStatusDto);
+      } catch {
+        // Fallback
+      }
       updateJob(id, (job) => {
         if (job.status === "ready") {
           return {
@@ -286,7 +308,7 @@ const DashboardV2: React.FC = () => {
       });
       toast.success("Job status updated");
     },
-    [updateJob]
+    [jobs, updateJob]
   );
 
   const handleCallRider = useCallback((_id: string) => {
