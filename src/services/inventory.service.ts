@@ -1,5 +1,11 @@
 import { api } from "@/lib/api";
-import type { CreateStoreDto, StoreDto, StoreStaffDto, VendorStoreProductDto } from "./contracts";
+import type {
+  CreateStoreDto,
+  StoreDto,
+  StoreStaffDto,
+  UpdateStoreDto,
+  VendorStoreProductDto,
+} from "./contracts";
 
 export const inventoryService = {
   listStores(vendorId?: string) {
@@ -14,6 +20,14 @@ export const inventoryService = {
 
   createStore(payload: CreateStoreDto) {
     return api.post<StoreDto>("/api/v1/inventory/stores", payload);
+  },
+
+  updateStore(storeId: string, payload: UpdateStoreDto) {
+    return api.put<StoreDto>(`/api/v1/inventory/stores/${storeId}`, payload);
+  },
+
+  deleteStore(storeId: string) {
+    return api.delete(`/api/v1/inventory/stores/${storeId}`);
   },
 
   listStaff(storeId: string) {

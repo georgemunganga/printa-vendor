@@ -21,7 +21,11 @@ import {
 import { useStore } from "@/context/store-context";
 import { useAuth } from "@/context/auth-context";
 import type { Store as StoreType } from "@/types";
-import { createStore, deleteStore, updateStore } from "@/mock-api/stores";
+import {
+  createStore as createMockStore,
+  deleteStore as deleteMockStore,
+  updateStore as updateMockStore,
+} from "@/mock-api/stores";
 import { inventoryService } from "@/services/inventory.service";
 
 interface StoreFormState {
@@ -115,12 +119,19 @@ const StoresPage: React.FC = () => {
     setIsSaving(true);
     try {
       if (editingStore) {
-        await updateStore(editingStore.id, {
+        const payload = {
           name: form.name,
           address: form.address,
           phone: form.phone,
           email: form.email,
-        });
+          city: "Lusaka",
+          country: "Zambia",
+        };
+        try {
+          await inventoryService.updateStore(editingStore.id, payload);
+        } catch {
+          await updateMockStore(editingStore.id, payload);
+        }
         toast.success("Store updated.");
       } else {
         try {
@@ -134,7 +145,7 @@ const StoresPage: React.FC = () => {
             email: form.email,
           });
         } catch {
-          await createStore({
+          await createMockStore({
             businessId: user.businessId,
             name: form.name,
             address: form.address,
@@ -162,7 +173,11 @@ const StoresPage: React.FC = () => {
     if (!storeToDelete) return;
 
     try {
-      await deleteStore(storeToDelete.id);
+      try {
+        await inventoryService.deleteStore(storeToDelete.id);
+      } catch {
+        await deleteMockStore(storeToDelete.id);
+      }
       if (activeStore?.id === storeToDelete.id) {
         setActiveStore(null);
       }

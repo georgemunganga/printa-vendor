@@ -3,18 +3,13 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import type { Permission, UserRole } from "@/types";
 import { ROLE_PERMISSIONS } from "@/lib/permissions";
 import { GOOGLE_CLIENT_ID } from "@/lib/auth-config";
-import { MOCK_STORES, type MembershipLike } from "@/mock-api/stores";
-import {
-  clearMockSession,
-  createMockSession,
-  persistMockSession,
-  refreshMockSession,
-  restoreMockSession,
-  type MockAuthSession,
-} from "@/mock-api/auth";
 import { apiAuthSessionService } from "@/services/auth-session.service";
 
-export interface StoreMembership extends MembershipLike {
+export interface StoreMembership {
+  storeId: string;
+  role: UserRole;
+  permissions: Permission[];
+  isActive?: boolean;
   title?: string;
 }
 
@@ -51,7 +46,6 @@ interface AuthContextValue {
   isStaff: () => boolean;
 }
 
-const REFRESH_POLL_INTERVAL_MS = 30 * 1000;
 const GOOGLE_PROVIDER_CLIENT_ID = GOOGLE_CLIENT_ID || "missing-google-client-id";
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -72,15 +66,8 @@ const buildDefaultMemberships = (candidate: AuthUser): StoreMembership[] => {
     return candidate.memberships.map(ensureMembershipPermissions);
   }
 
-  if (candidate.role === "owner") {
-    return MOCK_STORES.filter((s) => s.businessId === candidate.businessId).map((s) => ({
-      storeId: s.id,
-      role: "owner",
-      permissions: ROLE_PERMISSIONS.owner,
-      isActive: true,
-    }));
-  }
-
+  // The backend currently returns store ownership via the authenticated vendor profile
+  // and store list, not a membership payload. Do not fabricate memberships from mock data.
   const scopedAssigned = candidate.assignedStoreIds ?? [];
   const fallbackRole: UserRole = candidate.role ?? "staff";
   return scopedAssigned.map((storeId) => ({
@@ -125,10 +112,10 @@ const getEffectiveRoleAndPermissions = (
 
   // Root scope: allow pages that are not store-scoped if user has access from at least one membership.
   if (!activeStoreScope) {
-    const memberships = (user.memberships ?? []).filter((m) => m.isActive !== false);
-    if (memberships.some((m) => m.role === "owner")) {
+    if (user.role === "owner") {
       return { role: "owner", permissions: ROLE_PERMISSIONS.owner };
     }
+    const memberships = (user.memberships ?? []).filter((m) => m.isActive !== false);
     return {
       role: user.role,
       permissions: uniqPermissions(memberships.flatMap((m) => m.permissions)),
@@ -142,78 +129,67 @@ const getEffectiveRoleAndPermissions = (
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [session, setSession] = useState<MockAuthSession | null>(() => restoreMockSession());
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isRestoringApiSession, setIsRestoringApiSession] = useState(true);
   const [activeStoreScope, setActiveStoreScope] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return localStorage.getItem("printa_active_store_id");
   });
 
-  const user = session?.user ?? null;
-  const isAuthenticated = Boolean(session?.user);
+  const isAuthenticated = Boolean(user);
 
   const effectiveAccess = useMemo(
     () => getEffectiveRoleAndPermissions(user, activeStoreScope),
     [user, activeStoreScope]
   );
 
-  const login = (nextUser: AuthUser) => {
-    const normalizedUser = normalizeUser(nextUser);
-    const nextSession = createMockSession(normalizedUser);
-    setSession(nextSession);
-  };
+  const login = useCallback((nextUser: AuthUser) => {
+    setUser(normalizeUser(nextUser));
+  }, []);
 
-  const loginWithApi = async (email: string, password: string) => {
+  const loginWithApi = useCallback(async (email: string, password: string) => {
     const apiUser = await apiAuthSessionService.login(email, password);
     login(apiUser);
-  };
+  }, [login]);
 
-  const completeOtpLogin = async (token: string, tokenType = "Bearer") => {
+  const completeOtpLogin = useCallback(async (token: string, tokenType = "Bearer") => {
     const apiUser = await apiAuthSessionService.completeOtp(token, tokenType);
     login(apiUser);
-  };
+  }, [login]);
 
-  const completeOAuthLogin = async (token: string, tokenType = "Bearer") => {
+  const completeOAuthLogin = useCallback(async (token: string, tokenType = "Bearer") => {
     const apiUser = await apiAuthSessionService.completeOAuth(token, tokenType);
     login(apiUser);
-  };
+  }, [login]);
 
-  const logout = () => {
-    setSession(null);
+  const logout = useCallback(() => {
+    setUser(null);
     setActiveStoreScope(null);
-    clearMockSession();
     apiAuthSessionService.logout();
     if (typeof window !== "undefined") {
       localStorage.removeItem("printa_active_store_id");
     }
-  };
+  }, []);
 
-  const updateUser = (updates: Partial<AuthUser>) => {
-    setSession((prev) => {
-      if (!prev) return prev;
-      const mergedUser = normalizeUser({ ...prev.user, ...updates });
-      const nextSession: MockAuthSession = { ...prev, user: mergedUser };
-      persistMockSession(nextSession);
-      return nextSession;
-    });
-  };
+  const updateUser = useCallback((updates: Partial<AuthUser>) => {
+    setUser((prev) => (prev ? normalizeUser({ ...prev, ...updates }) : prev));
+  }, []);
 
-  const can = (permission: Permission): boolean => {
+  const can = useCallback((permission: Permission): boolean => {
     if (!effectiveAccess.role) return false;
     if (effectiveAccess.role === "owner") return true;
     return effectiveAccess.permissions.includes(permission);
-  };
+  }, [effectiveAccess]);
 
-  const hasRole = (role: UserRole): boolean => effectiveAccess.role === role;
-  const isOwner = (): boolean => effectiveAccess.role === "owner";
-  const isManager = (): boolean => effectiveAccess.role === "manager";
-  const isStaff = (): boolean => effectiveAccess.role === "staff";
+  const hasRole = useCallback((role: UserRole): boolean => effectiveAccess.role === role, [effectiveAccess.role]);
+  const isOwner = useCallback((): boolean => effectiveAccess.role === "owner", [effectiveAccess.role]);
+  const isManager = useCallback((): boolean => effectiveAccess.role === "manager", [effectiveAccess.role]);
+  const isStaff = useCallback((): boolean => effectiveAccess.role === "staff", [effectiveAccess.role]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        if (session) return;
         const apiUser = await apiAuthSessionService.restore();
         if (!cancelled && apiUser) {
           login(apiUser);
@@ -226,28 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    if (!session || typeof window === "undefined") return;
-
-    const intervalId = window.setInterval(() => {
-      setSession((prev) => {
-        if (!prev) return prev;
-        const refreshed = refreshMockSession(prev);
-        if (!refreshed) {
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("printa_active_store_id");
-          }
-          setActiveStoreScope(null);
-          return null;
-        }
-        return refreshed;
-      });
-    }, REFRESH_POLL_INTERVAL_MS);
-
-    return () => window.clearInterval(intervalId);
-  }, [session?.refreshToken]);
+  }, [login]);
 
   const setActiveStoreScopeHandler = useCallback((storeId: string | null) => {
     setActiveStoreScope(storeId);
@@ -271,7 +226,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isManager,
       isStaff,
     }),
-    [user, isAuthenticated, isRestoringApiSession, setActiveStoreScopeHandler, activeStoreScope]
+    [
+      user,
+      isAuthenticated,
+      isRestoringApiSession,
+      login,
+      loginWithApi,
+      completeOtpLogin,
+      completeOAuthLogin,
+      logout,
+      updateUser,
+      setActiveStoreScopeHandler,
+      can,
+      hasRole,
+      isOwner,
+      isManager,
+      isStaff,
+    ]
   );
 
   return (

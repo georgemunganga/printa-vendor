@@ -18,6 +18,16 @@ export interface UserDto {
   updated_at: ISODateString;
 }
 
+export interface VendorProfileDto {
+  id: UUID;
+  owner_id: UUID;
+  tier_id: UUID;
+  business_name: string;
+  tax_id?: string;
+  created_at: ISODateString;
+  updated_at: ISODateString;
+}
+
 export interface LoginRequestDto {
   email: string;
   password: string;
@@ -119,6 +129,16 @@ export interface CreateStoreDto {
   address?: string;
   city?: string;
   country: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface UpdateStoreDto {
+  name: string;
+  description?: string;
+  address: string;
+  city?: string;
+  country?: string;
   phone?: string;
   email?: string;
 }

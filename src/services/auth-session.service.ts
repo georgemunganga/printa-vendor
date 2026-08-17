@@ -1,5 +1,6 @@
 import { authService } from "./auth.service";
 import { usersService } from "./users.service";
+import { vendorService } from "./vendor.service";
 import type { AuthUser } from "@/context/auth-context";
 import { ROLE_PERMISSIONS } from "@/lib/permissions";
 import type { UserRole } from "@/types";
@@ -44,7 +45,12 @@ export const buildAuthUserFromApiToken = async (token: string): Promise<AuthUser
   const fallbackName = splitName(claims.email);
 
   try {
-    const user = claims.user_id ? await usersService.get(claims.user_id) : null;
+    const [user, vendor] = await Promise.all([
+      claims.user_id ? usersService.get(claims.user_id) : Promise.resolve(null),
+      claims.role?.toUpperCase() === "VENDOR"
+        ? vendorService.getProfile().catch(() => null)
+        : Promise.resolve(null),
+    ]);
     const name = [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim() || fallbackName;
     return {
       id: user?.id || claims.user_id || claims.email || "api-user",
@@ -54,8 +60,8 @@ export const buildAuthUserFromApiToken = async (token: string): Promise<AuthUser
       memberSince: user?.created_at ? new Date(user.created_at).toLocaleDateString() : "Today",
       role,
       permissions: ROLE_PERMISSIONS[role],
-      businessId: "api-business",
-      businessName: "Printa Business",
+      businessId: vendor?.id || "",
+      businessName: vendor?.business_name || "Unassigned vendor",
     };
   } catch {
     return {
@@ -65,8 +71,8 @@ export const buildAuthUserFromApiToken = async (token: string): Promise<AuthUser
       memberSince: "Today",
       role,
       permissions: ROLE_PERMISSIONS[role],
-      businessId: "api-business",
-      businessName: "Printa Business",
+      businessId: "",
+      businessName: "Unassigned vendor",
     };
   }
 };

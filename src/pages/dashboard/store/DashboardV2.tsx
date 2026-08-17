@@ -4,6 +4,7 @@ import { Inbox, Layers, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { PrintJob, PrintJobStatus } from "@/types";
 import { mockLiveOrders } from "@/data/mockLiveOrders";
+import type { OrderDto, OrderStatusDto } from "@/services/contracts";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { LiveFeedTopBar } from "@/components/dashboard/live-feed/LiveFeedTopBar";
 import {
@@ -20,6 +21,54 @@ const addHistory = (job: PrintJob, status: PrintJobStatus) => {
   const history = job.statusHistory ? [...job.statusHistory] : [];
   return [...history, { status, timestamp: new Date() }];
 };
+
+const toPrintJobStatus = (status: OrderStatusDto): PrintJobStatus => {
+  switch (status) {
+    case "PENDING":
+      return "pending";
+    case "CONFIRMED":
+    case "IN_PRODUCTION":
+      return "printing";
+    case "READY":
+      return "ready";
+    case "DELIVERED":
+      return "delivered";
+    case "CANCELLED":
+      return "cancelled";
+  }
+};
+
+const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
+  const items = order.items ?? [];
+  const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
+  return {
+    id: order.id,
+    fileName: order.order_number,
+    status: toPrintJobStatus(order.status),
+    totalPrice: order.total,
+    pageCount: copies,
+    copies,
+    colorMode: "color",
+    printer: { name: "Production queue" },
+    createdAt: new Date(order.created_at),
+    lastUpdated: new Date(order.updated_at),
+    customerName: order.customer_id ? `Customer ${order.customer_id.slice(0, 8)}` : "Walk-in customer",
+    deliveryType: order.delivery_address ? "rider" : "pickup",
+    orderChannel: order.channel === "POS" ? "walk-in" : "online",
+    notes: order.notes,
+    statusHistory: [{ status: toPrintJobStatus(order.status), timestamp: new Date(order.updated_at) }],
+  };
+};
+
+const toFallbackJobs = (storeId?: string): PrintJob[] =>
+  scopeItemsByActiveStore(mockLiveOrders, storeId).map((order) => ({
+    ...order,
+    createdAt: new Date(order.createdAt),
+    estimatedDelivery: order.estimatedDelivery ? new Date(order.estimatedDelivery) : undefined,
+    acceptDeadline: order.acceptDeadline ? new Date(order.acceptDeadline) : undefined,
+    lastUpdated: new Date(),
+    statusHistory: [{ status: order.status, timestamp: new Date(order.createdAt) }],
+  }));
 
 // ── Notification sound ──
 const notificationAudio = new Audio("/audio/liveorder.mp3");
@@ -132,36 +181,41 @@ const DashboardV2: React.FC = () => {
     [activeStore?.id]
   );
 
-  const [jobs, setJobs] = useState<PrintJob[]>(() =>
-    scopeItemsByActiveStore(mockLiveOrders, activeStore?.id).map((o) => ({
-      ...o,
-      createdAt: new Date(o.createdAt),
-      estimatedDelivery: o.estimatedDelivery
-        ? new Date(o.estimatedDelivery)
-        : undefined,
-      acceptDeadline: o.acceptDeadline
-        ? new Date(o.acceptDeadline)
-        : undefined,
-      lastUpdated: new Date(),
-      statusHistory: [{ status: o.status, timestamp: new Date(o.createdAt) }],
-    }))
-  );
-
+  const [jobs, setJobs] = useState<PrintJob[]>([]);
+  const [isUsingFallback, setIsUsingFallback] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
 
   useEffect(() => {
-    setJobs(
-      scopeItemsByActiveStore(mockLiveOrders, activeStore?.id).map((o) => ({
-        ...o,
-        createdAt: new Date(o.createdAt),
-        estimatedDelivery: o.estimatedDelivery ? new Date(o.estimatedDelivery) : undefined,
-        acceptDeadline: o.acceptDeadline ? new Date(o.acceptDeadline) : undefined,
-        lastUpdated: new Date(),
-        statusHistory: [{ status: o.status, timestamp: new Date(o.createdAt) }],
-      }))
-    );
+    let cancelled = false;
+
+    void (async () => {
+      if (!activeStore?.id) {
+        if (!cancelled) {
+          setJobs([]);
+          setIsUsingFallback(false);
+        }
+        return;
+      }
+
+      try {
+        const orders = await ordersService.listByStore(activeStore.id);
+        if (!cancelled) {
+          setJobs(orders.map(mapOrderToPrintJob));
+          setIsUsingFallback(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setJobs(toFallbackJobs(activeStore.id));
+          setIsUsingFallback(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeStore?.id]);
 
   // ── Simulate incoming orders ──
@@ -170,7 +224,7 @@ const DashboardV2: React.FC = () => {
   soundEnabledRef.current = soundEnabled;
 
   useEffect(() => {
-    if (!isOnline) return;
+    if (!isOnline || !isUsingFallback) return;
 
     // Random interval between 8–20 seconds
     const scheduleNext = () => {
@@ -214,7 +268,7 @@ const DashboardV2: React.FC = () => {
 
     let timerId = scheduleNext();
     return () => clearTimeout(timerId);
-  }, [isOnline, scopedSimulatedOrders]);
+  }, [isOnline, isUsingFallback, scopedSimulatedOrders]);
 
   // ── Job actions ──
   const updateJob = useCallback(
@@ -231,7 +285,7 @@ const DashboardV2: React.FC = () => {
   const handleAccept = useCallback(
     async (id: string) => {
       try {
-        await ordersService.updateStatus(id, "PRINTING");
+        await ordersService.updateStatus(id, "CONFIRMED");
       } catch {
         // Fallback local state if backend order is simulated/mock
       }
@@ -269,7 +323,7 @@ const DashboardV2: React.FC = () => {
   const handleStartPrint = useCallback(
     async (id: string) => {
       try {
-        await ordersService.updateStatus(id, "PRINTING");
+        await ordersService.updateStatus(id, "IN_PRODUCTION");
       } catch {
         // Fallback
       }
@@ -286,8 +340,10 @@ const DashboardV2: React.FC = () => {
   const handleMarkReady = useCallback(
     async (id: string) => {
       try {
-        const nextStatus = jobs.find((j) => j.id === id)?.status === "ready" ? "COMPLETED" : "READY";
-        await ordersService.updateStatus(id, nextStatus as OrderStatusDto);
+        const nextStatus: OrderStatusDto = jobs.find((j) => j.id === id)?.status === "ready"
+          ? "DELIVERED"
+          : "READY";
+        await ordersService.updateStatus(id, nextStatus);
       } catch {
         // Fallback
       }
