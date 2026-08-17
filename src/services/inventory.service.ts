@@ -41,15 +41,15 @@ export const inventoryService = {
     return api.post<VendorStoreProductDto>(`/api/v1/inventory/stores/${storeId}/products`, payload);
   },
 
-  updateStock(productId: string, stockQuantity: number) {
-    return api.patch<VendorStoreProductDto>(`/api/v1/inventory/products/${productId}/stock`, {
-      stock_quantity: stockQuantity,
+  updateStock(productId: string, quantity: number) {
+    return api.patch<unknown>(`/api/v1/inventory/products/${productId}/stock`, {
+      quantity,
     });
   },
 
-  setAvailability(productId: string, isAvailable: boolean) {
-    return api.patch<VendorStoreProductDto>(`/api/v1/inventory/products/${productId}/availability`, {
-      is_available: isAvailable,
+  setAvailability(productId: string, available: boolean) {
+    return api.patch<unknown>(`/api/v1/inventory/products/${productId}/availability`, {
+      available,
     });
   },
 };

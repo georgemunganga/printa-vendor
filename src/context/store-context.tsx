@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { Store } from "@/types";
 import { useAuth } from "./auth-context";
 import { getStoresForUser } from "@/mock-api/stores";
+import { inventoryService } from "@/services/inventory.service";
+import type { StoreDto } from "@/services/contracts";
 
 const SHIFT_UNLOCK_STORAGE_PREFIX = "printa_shift_unlock_v1";
 
@@ -35,17 +37,39 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     setIsHydrating(true);
     try {
-      const stores = await getStoresForUser(user);
-      setAvailableStores(stores);
+      let resolvedStores: Store[] = [];
+      try {
+        const storeDtos = await inventoryService.listStores();
+        if (Array.isArray(storeDtos) && storeDtos.length > 0) {
+          resolvedStores = storeDtos.map((dto: StoreDto) => ({
+            id: dto.id,
+            name: dto.name,
+            address: dto.address || "Zambia",
+            phone: dto.phone || "",
+            email: dto.email,
+            status: dto.is_active ? "active" : "inactive",
+            businessId: dto.vendor_id,
+            createdAt: dto.created_at,
+          }));
+        }
+      } catch {
+        // Fallback to mock/local stores if API is unavailable or un-onboarded
+      }
+
+      if (resolvedStores.length === 0) {
+        resolvedStores = await getStoresForUser(user);
+      }
+
+      setAvailableStores(resolvedStores);
       const savedId = localStorage.getItem("printa_active_store_id");
-      const savedStore = savedId ? stores.find((s) => s.id === savedId) ?? null : null;
+      const savedStore = savedId ? resolvedStores.find((s) => s.id === savedId) ?? null : null;
 
       setActiveStoreState((prev) => {
-        if (prev && stores.some((s) => s.id === prev.id)) {
+        if (prev && resolvedStores.some((s) => s.id === prev.id)) {
           return prev;
         }
         if (savedStore) return savedStore;
-        if (stores.length === 1) return stores[0];
+        if (resolvedStores.length === 1) return resolvedStores[0];
         return null;
       });
     } finally {
