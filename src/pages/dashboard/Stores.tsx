@@ -22,6 +22,7 @@ import { useStore } from "@/context/store-context";
 import { useAuth } from "@/context/auth-context";
 import type { Store as StoreType } from "@/types";
 import { createStore, deleteStore, updateStore } from "@/mock-api/stores";
+import { inventoryService } from "@/services/inventory.service";
 
 interface StoreFormState {
   name: string;
@@ -122,13 +123,25 @@ const StoresPage: React.FC = () => {
         });
         toast.success("Store updated.");
       } else {
-        await createStore({
-          businessId: user.businessId,
-          name: form.name,
-          address: form.address,
-          phone: form.phone,
-          email: form.email,
-        });
+        try {
+          await inventoryService.createStore({
+            vendor_id: user.businessId,
+            name: form.name,
+            address: form.address,
+            city: "Lusaka",
+            country: "Zambia",
+            phone: form.phone,
+            email: form.email,
+          });
+        } catch {
+          await createStore({
+            businessId: user.businessId,
+            name: form.name,
+            address: form.address,
+            phone: form.phone,
+            email: form.email,
+          });
+        }
         toast.success("Store created.");
       }
       await refreshStores();
