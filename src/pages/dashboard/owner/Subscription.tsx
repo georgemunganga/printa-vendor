@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -22,6 +22,8 @@ import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/context/auth-context";
+import { billingService } from "@/services/billing.service";
 
 /* ─── Data ─── */
 
@@ -104,9 +106,38 @@ const MOBILE_NETWORKS = ["MTN", "Airtel", "Zamtel"];
 /* ─── Page ─── */
 
 const SubscriptionPage: React.FC = () => {
-  const [currentTier] = useState("pro");
+  const { user } = useAuth();
+  const [currentTier, setCurrentTier] = useState("core");
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [changeTo, setChangeTo] = useState<string | null>(null);
   const [showInvoices, setShowInvoices] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const vendorId = user?.businessId;
+      if (!vendorId) return;
+      try {
+        const [subscription, liveInvoices] = await Promise.all([
+          billingService.getSubscription(vendorId),
+          billingService.listInvoices(vendorId),
+        ]);
+        if (!cancelled) {
+          const tierId = subscription.tier_name?.toLowerCase();
+          if (tierId && TIERS.some((tier) => tier.id === tierId)) setCurrentTier(tierId);
+          setInvoices(liveInvoices.map((invoice) => ({
+            id: invoice.invoice_number,
+            date: new Date(invoice.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            amount: `${invoice.currency === "ZMW" ? "K" : invoice.currency}${invoice.amount.toFixed(2)}`,
+            status: invoice.status === "PAID" ? "paid" : "free",
+          })));
+        }
+      } catch {
+        if (!cancelled) setInvoices(INVOICES);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.businessId]);
 
   // Wizard state
   const [wizardStep, setWizardStep] = useState(1);
@@ -115,7 +146,7 @@ const SubscriptionPage: React.FC = () => {
   const [mobileNumber, setMobileNumber] = useState("");
   const [pin, setPin] = useState("");
 
-  const current = TIERS.find((t) => t.id === currentTier)!;
+  const current = TIERS.find((t) => t.id === currentTier) ?? TIERS[0];
   const target = changeTo ? TIERS.find((t) => t.id === changeTo) : null;
   const isUpgrade = target
     ? TIERS.findIndex((t) => t.id === changeTo) > TIERS.findIndex((t) => t.id === currentTier)
@@ -162,7 +193,7 @@ const SubscriptionPage: React.FC = () => {
 
   const handleFinish = () => {
     handleClose();
-    toast.success(`Successfully switched to ${target?.name}!`);
+    toast.info("Plan changes require a configured billing tier and payment provider. No charge was made.");
   };
 
   return (
@@ -352,7 +383,7 @@ const SubscriptionPage: React.FC = () => {
                   Billing History
                 </p>
                 <p className="text-[11px] text-gray-400">
-                  {INVOICES.length} invoices
+                  {invoices.length} invoices
                 </p>
               </div>
             </div>
@@ -374,11 +405,11 @@ const SubscriptionPage: React.FC = () => {
                 className="overflow-hidden"
               >
                 <div className="mt-2 rounded-2xl bg-white border border-gray-100 overflow-hidden">
-                  {INVOICES.map((inv, i) => (
+                  {invoices.map((inv, i) => (
                     <div
                       key={inv.id}
                       className={`flex items-center gap-3 px-4 py-3 ${
-                        i < INVOICES.length - 1 ? "border-b border-gray-50" : ""
+                        i < invoices.length - 1 ? "border-b border-gray-50" : ""
                       }`}
                     >
                       <div className="flex-1 min-w-0">

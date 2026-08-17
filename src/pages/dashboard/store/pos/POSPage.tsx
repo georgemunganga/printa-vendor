@@ -24,6 +24,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@/context/store-context";
 import { hashString } from "@/lib/store-scope";
+import { inventoryService } from "@/services/inventory.service";
+import { catalogService } from "@/services/catalog.service";
+import { ordersService } from "@/services/orders.service";
+import { posService } from "@/services/pos.service";
 
 interface ServiceCategory {
   id: string;
@@ -133,6 +137,8 @@ const POSPage: React.FC = () => {
   const [order, setOrder] = useState<OrderLine[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "ewallet">("cash");
   const [showMobileOrder, setShowMobileOrder] = useState(false);
+  const [liveServices, setLiveServices] = useState<ServiceItem[] | null>(null);
+  const [isCharging, setIsCharging] = useState(false);
   const priceMultiplier = useMemo(() => {
     if (!activeStore?.id) return 1;
     const step = hashString(activeStore.id) % 3; // 0,1,2
@@ -140,12 +146,11 @@ const POSPage: React.FC = () => {
   }, [activeStore?.id]);
 
   const servicesForStore = useMemo(
-    () =>
-      services.map((service) => ({
-        ...service,
-        price: Number((service.price * priceMultiplier).toFixed(2)),
-      })),
-    [priceMultiplier]
+    () => liveServices ?? services.map((service) => ({
+      ...service,
+      price: Number((service.price * priceMultiplier).toFixed(2)),
+    })),
+    [liveServices, priceMultiplier]
   );
 
   useEffect(() => {
@@ -153,6 +158,29 @@ const POSPage: React.FC = () => {
     setSearch("");
     setActiveCategory("all");
     setShowMobileOrder(false);
+    setLiveServices(null);
+    if (!activeStore?.id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const storeProducts = await inventoryService.listProducts(activeStore.id);
+        const catalogue = await Promise.all(storeProducts.map(async (storeProduct) => ({
+          storeProduct,
+          product: await catalogService.getProduct(storeProduct.platform_product_id),
+        })));
+        if (!cancelled) {
+          setLiveServices(catalogue.filter(({ storeProduct }) => storeProduct.is_available).map(({ storeProduct, product }) => ({
+            id: storeProduct.id,
+            categoryId: categories.find((category) => category.name.toLowerCase() === product.category.toLowerCase())?.id ?? "s1",
+            name: product.name,
+            price: storeProduct.vendor_price,
+          })));
+        }
+      } catch {
+        // Retain the existing local catalogue only when the inventory API is unavailable.
+      }
+    })();
+    return () => { cancelled = true; };
   }, [activeStore?.id]);
 
   const filtered = useMemo(() => {
@@ -200,10 +228,35 @@ const POSPage: React.FC = () => {
   const itemCount = order.reduce((sum, l) => sum + l.qty, 0);
   const hasItems = order.length > 0;
 
-  const handleCharge = () => {
-    if (!order.length) return;
-    toast.success(`Order charged: K${total.toFixed(2)}`);
-    setOrder([]);
+  const handleCharge = async () => {
+    if (!order.length || isCharging) return;
+    if (!activeStore?.id || !liveServices) {
+      toast.error("Live POS checkout requires an available store inventory connection.");
+      return;
+    }
+    setIsCharging(true);
+    try {
+      const createdOrder = await ordersService.place({
+        store_id: activeStore.id,
+        channel: "POS",
+        items: order.map((line) => ({ vendor_store_product_id: line.service.id, quantity: line.qty })),
+      });
+      const method = paymentMethod === "cash" ? "CASH" : paymentMethod === "card" ? "CARD" : "MOBILE_MONEY";
+      await posService.recordPayment({
+        order_id: createdOrder.id,
+        store_id: activeStore.id,
+        amount: createdOrder.total,
+        payment_method: method,
+        notes: "Recorded from Vendor POS terminal",
+      });
+      toast.success(`Order charged: K${createdOrder.total.toFixed(2)}`);
+      setOrder([]);
+      setShowMobileOrder(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to complete the POS transaction.");
+    } finally {
+      setIsCharging(false);
+    }
   };
 
   return (
