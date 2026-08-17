@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useState } from "react";
+import React, { useEffect, useRef, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CheckCircle,
@@ -20,6 +20,7 @@ import { useJobContext } from "@/context/job-context";
 import { useStore } from "@/context/store-context";
 import { PrintJob } from "@/types";
 import { Button } from "@/components/ui/button";
+import { productionService, type ProductionJobDto } from "@/services/production.service";
 
 /* ─── Channel filter ─── */
 type ChannelFilter = "all" | "online" | "walk-in";
@@ -43,6 +44,23 @@ const statusFilters: { key: StatusFilter; label: string }[] = [
 
 const formatDate = (date: Date) =>
   date.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+const toPrintJob = (job: ProductionJobDto): PrintJob => ({
+  id: job.id,
+  fileName: `Production job ${job.order_id.slice(0, 8)}`,
+  status: job.status === "QUEUED" ? "pending" : job.status === "COMPLETED" ? "delivered" : job.status === "CANCELLED" ? "cancelled" : "printing",
+  totalPrice: 0,
+  pageCount: 1,
+  copies: 1,
+  colorMode: "color",
+  printer: { name: "Production queue" },
+  createdAt: new Date(job.created_at),
+  lastUpdated: new Date(job.updated_at),
+  productionStartedAt: job.started_at ? new Date(job.started_at) : undefined,
+  readyAt: job.completed_at ? new Date(job.completed_at) : undefined,
+  notes: job.notes,
+  orderChannel: "online",
+});
 
 /* ─── Order Card ─── */
 const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
@@ -102,8 +120,28 @@ const OrderHistoryPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const { jobs } = useJobContext();
+  const { jobs: fallbackJobs } = useJobContext();
   const { activeStore } = useStore();
+  const [jobs, setJobs] = useState<PrintJob[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!activeStore?.id) {
+        if (!cancelled) setJobs([]);
+        return;
+      }
+      try {
+        const productionJobs = await productionService.listStoreJobs(activeStore.id);
+        if (!cancelled) setJobs(productionJobs.map(toPrintJob));
+      } catch {
+        if (!cancelled) setJobs(fallbackJobs);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStore?.id, fallbackJobs]);
 
   const filtered = useMemo(() => {
     let list = jobs;

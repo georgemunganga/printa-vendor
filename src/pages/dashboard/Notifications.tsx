@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Bell,
@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { toast } from "sonner";
+import { notificationsService } from "@/services/notifications.service";
+import type { NotificationDto } from "@/services/contracts";
 
 interface Notification {
   id: string;
@@ -92,9 +94,43 @@ const MOCK_NOTIFICATIONS: Notification[] = [
   },
 ];
 
+const toNotification = (dto: NotificationDto): Notification => {
+  const type = dto.type.toLowerCase();
+  return {
+    id: dto.id,
+    type: type === "order" || type === "payment" || type === "team" ? type : "system",
+    title: dto.title,
+    message: dto.body,
+    timestamp: new Date(dto.created_at),
+    read: dto.status !== "UNREAD",
+  };
+};
+
 const Notifications: React.FC = () => {
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isUsingFallback, setIsUsingFallback] = useState(false);
   const [filter, setFilter] = useState<"all" | "unread">("all");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await notificationsService.list({ limit: 100 });
+        if (!cancelled) {
+          setNotifications(response.notifications.map(toNotification));
+          setIsUsingFallback(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setNotifications(MOCK_NOTIFICATIONS);
+          setIsUsingFallback(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -103,21 +139,34 @@ const Notifications: React.FC = () => {
       ? notifications.filter((n) => !n.read)
       : notifications;
 
-  const handleMarkAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-    toast.success("Marked as read");
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      if (!isUsingFallback) await notificationsService.markRead(id);
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+      toast.success("Marked as read");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to mark notification as read.");
+    }
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    toast.success("All notifications marked as read");
+  const handleMarkAllAsRead = async () => {
+    try {
+      if (!isUsingFallback) await notificationsService.markAllRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      toast.success("All notifications marked as read");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to mark all notifications as read.");
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-    toast.success("Notification deleted");
+  const handleDelete = async (id: string) => {
+    try {
+      if (!isUsingFallback) await notificationsService.delete(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      toast.success("Notification deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to delete notification.");
+    }
   };
 
   const formatTimestamp = (date: Date) => {
