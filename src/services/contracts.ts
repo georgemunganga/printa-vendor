@@ -127,6 +127,17 @@ export interface StoreDto {
   updated_at: ISODateString;
 }
 
+export interface OperatingHourDto {
+  day_of_week: number;
+  is_open: boolean;
+  opens_at?: string;
+  closes_at?: string;
+}
+
+export interface ReplaceOperatingHoursDto {
+  hours: OperatingHourDto[];
+}
+
 export interface DeliveryZoneDto {
   id: UUID;
   store_id: UUID;

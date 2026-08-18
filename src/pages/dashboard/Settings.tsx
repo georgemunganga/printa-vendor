@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Bell, Lock, Shield, DollarSign, Smartphone, Check, LogOut, Store, Package } from "lucide-react";
+import { Bell, Lock, Shield, DollarSign, Smartphone, Check, Clock, LogOut, Store, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -9,6 +9,8 @@ import { useStore } from "@/context/store-context";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { operatingHoursService } from "@/services/operating-hours.service";
+import type { OperatingHourDto } from "@/services/contracts";
 
 interface SettingCard {
   title: string;
@@ -18,14 +20,22 @@ interface SettingCard {
   action?: () => void;
 }
 
-type ModalType = "security" | "notifications" | "privacy" | "currency" | "download" | null;
+type ModalType = "security" | "notifications" | "privacy" | "currency" | "hours" | "download" | null;
+
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+const createEmptyOperatingHours = (): OperatingHourDto[] =>
+  WEEKDAYS.map((_, day) => ({ day_of_week: day, is_open: false }));
 
 const SettingsPage = () => {
   const { selectedCurrency, availableCurrencies } = useCurrencyContext();
   const { logout } = useAuth();
-  const { setActiveStore } = useStore();
+  const { activeStore, setActiveStore } = useStore();
   const navigate = useNavigate();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [operatingHours, setOperatingHours] = useState<OperatingHourDto[]>(createEmptyOperatingHours);
+  const [isLoadingOperatingHours, setIsLoadingOperatingHours] = useState(false);
+  const [isSavingOperatingHours, setIsSavingOperatingHours] = useState(false);
 
   const coreSettings = useMemo<SettingCard[]>(
     () => [
@@ -50,6 +60,54 @@ const SettingsPage = () => {
     ],
     [setActiveModal]
   );
+
+  const openOperatingHours = async () => {
+    if (!activeStore) {
+      toast.error("Select a store before managing operating hours.");
+      return;
+    }
+
+    setActiveModal("hours");
+    setIsLoadingOperatingHours(true);
+    try {
+      const persistedHours = await operatingHoursService.list(activeStore.id);
+      const byDay = new Map(persistedHours.map((hour) => [hour.day_of_week, hour]));
+      setOperatingHours(WEEKDAYS.map((_, day) => byDay.get(day) || { day_of_week: day, is_open: false }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load operating hours.";
+      toast.error(message);
+      setActiveModal(null);
+    } finally {
+      setIsLoadingOperatingHours(false);
+    }
+  };
+
+  const updateOperatingHour = (day: number, patch: Partial<OperatingHourDto>) => {
+    setOperatingHours((previous) => previous.map((hour) => {
+      if (hour.day_of_week !== day) return hour;
+      const next = { ...hour, ...patch };
+      if (!next.is_open) {
+        delete next.opens_at;
+        delete next.closes_at;
+      }
+      return next;
+    }));
+  };
+
+  const saveOperatingHours = async () => {
+    if (!activeStore) return;
+    setIsSavingOperatingHours(true);
+    try {
+      await operatingHoursService.replace(activeStore.id, { hours: operatingHours });
+      toast.success("Operating hours saved.");
+      setActiveModal(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to save operating hours.";
+      toast.error(message);
+    } finally {
+      setIsSavingOperatingHours(false);
+    }
+  };
 
   const settings = useMemo<SettingCard[]>(() => {
     const currencySetting = {
@@ -105,6 +163,30 @@ const SettingsPage = () => {
               </Button>
             </div>
           ))}
+
+          <div
+            className="flex flex-col rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-center gap-4">
+              <div className="rounded-2xl p-3 bg-printa-red/10 text-printa-red">
+                <Clock size={18} className="text-printa-red" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Operating Hours</p>
+                <p className="text-sm text-gray-500">
+                  {activeStore ? `Set the published hours for ${activeStore.name}.` : "Select a store to manage published hours."}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              className="text-sm font-semibold text-printa-red"
+              onClick={() => void openOperatingHours()}
+              disabled={!activeStore}
+            >
+              Manage
+            </Button>
+          </div>
 
           {/* Inventory link */}
           <div
@@ -188,6 +270,67 @@ const SettingsPage = () => {
           </Button>
         </div>
       </div>
+
+      <ResponsiveModal
+        open={activeModal === "hours"}
+        onOpenChange={(open) => !open && setActiveModal(null)}
+        title={
+          <span className="flex items-center gap-2">
+            <Clock size={20} className="text-printa-red" />
+            Operating Hours
+          </span>
+        }
+        description={activeStore ? `Published availability for ${activeStore.name}.` : "Select a store to manage operating hours."}
+      >
+        {isLoadingOperatingHours ? (
+          <div className="py-8 text-center text-sm text-gray-500">Loading operating hours...</div>
+        ) : (
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-gray-500">Closed days are saved without opening or closing times. Overnight hours are not supported by this first contract.</p>
+            {operatingHours.map((hour) => (
+              <div key={hour.day_of_week} className="flex flex-col gap-3 rounded-xl border border-gray-200 p-3 sm:flex-row sm:items-center">
+                <div className="flex min-w-28 items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-gray-800">{WEEKDAYS[hour.day_of_week]}</span>
+                  <button
+                    type="button"
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${hour.is_open ? "bg-red-50 text-printa-red" : "bg-gray-100 text-gray-500"}`}
+                    onClick={() => updateOperatingHour(hour.day_of_week, { is_open: !hour.is_open })}
+                  >
+                    {hour.is_open ? "Open" : "Closed"}
+                  </button>
+                </div>
+                {hour.is_open ? (
+                  <div className="flex flex-1 items-center gap-2">
+                    <input
+                      aria-label={`${WEEKDAYS[hour.day_of_week]} opening time`}
+                      type="time"
+                      value={hour.opens_at || ""}
+                      onChange={(event) => updateOperatingHour(hour.day_of_week, { opens_at: event.target.value })}
+                      className="h-10 flex-1 rounded-xl border border-gray-200 px-3 text-sm"
+                    />
+                    <span className="text-xs text-gray-400">to</span>
+                    <input
+                      aria-label={`${WEEKDAYS[hour.day_of_week]} closing time`}
+                      type="time"
+                      value={hour.closes_at || ""}
+                      onChange={(event) => updateOperatingHour(hour.day_of_week, { closes_at: event.target.value })}
+                      className="h-10 flex-1 rounded-xl border border-gray-200 px-3 text-sm"
+                    />
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-400">No customer availability is published for this day.</span>
+                )}
+              </div>
+            ))}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setActiveModal(null)} disabled={isSavingOperatingHours}>Cancel</Button>
+              <Button className="bg-printa-red hover:bg-printa-red/90" onClick={() => void saveOperatingHours()} disabled={isSavingOperatingHours}>
+                {isSavingOperatingHours ? "Saving..." : "Save Hours"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </ResponsiveModal>
 
       {/* Security Settings Modal */}
       <ResponsiveModal
