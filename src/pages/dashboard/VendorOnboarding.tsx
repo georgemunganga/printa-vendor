@@ -23,8 +23,6 @@ import { getApiKey } from "../../../config/api-keys";
 import {
   getOnboardingState,
   saveOnboardingState,
-  markOnboardingComplete,
-  clearOnboardingComplete,
   type VendorOnboardingState,
   type DayHours,
   type WeekSchedule,
@@ -150,8 +148,7 @@ const VendorOnboarding: React.FC = () => {
   const next = () => {
     if (!canContinue()) return;
     if (step >= TOTAL_STEPS) {
-      markOnboardingComplete();
-      toast.success("Onboarding complete. Continue to account creation.");
+      toast.info("Continue to account creation. This onboarding draft has not been saved to a Printa vendor profile.");
       navigate("/signup");
       return;
     }
@@ -165,12 +162,6 @@ const VendorOnboarding: React.FC = () => {
       set({ step: step - 1 });
     }
   };
-
-  useEffect(() => {
-    if (data.step === 0) {
-      clearOnboardingComplete();
-    }
-  }, [data.step]);
 
   const toggleDay = (day: string) => {
     const current = data.storeHours[day];

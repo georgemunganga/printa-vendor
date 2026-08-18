@@ -1,13 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from "sonner";
 import { User, Mail } from 'lucide-react';
 import { AuthLayout } from '@/components/auth/AuthLayout';
-import {
-  isOnboardingComplete,
-} from "@/lib/vendorOnboardingState";
 import { authService } from "@/services/auth.service";
 import { getApiErrorMessage } from "@/lib/api";
 
@@ -26,12 +23,6 @@ const SignUp = () => {
   const [email, setEmail] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
-
-  useEffect(() => {
-    if (!isOnboardingComplete()) {
-      navigate("/onboarding", { replace: true });
-    }
-  }, [navigate]);
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();

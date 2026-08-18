@@ -7,7 +7,6 @@ import { useCurrencyContext } from "@/context/currency-context";
 import { useAuth } from "@/context/auth-context";
 import { useStore } from "@/context/store-context";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
@@ -22,32 +21,17 @@ interface SettingCard {
 type ModalType = "security" | "notifications" | "privacy" | "currency" | "download" | null;
 
 const SettingsPage = () => {
-  const { selectedCurrency, availableCurrencies, setSelectedCurrency } = useCurrencyContext();
+  const { selectedCurrency, availableCurrencies } = useCurrencyContext();
   const { logout } = useAuth();
   const { setActiveStore } = useStore();
   const navigate = useNavigate();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
 
-  // Security settings state
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [sessionTimeout, setSessionTimeout] = useState(true);
-
-  // Notification settings state
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [smsNotifications, setSmsNotifications] = useState(true);
-  const [orderUpdates, setOrderUpdates] = useState(true);
-  const [promotions, setPromotions] = useState(false);
-
-  // Privacy settings state
-  const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
-  const [shareWithPartners, setShareWithPartners] = useState(false);
-  const [locationTracking, setLocationTracking] = useState(true);
-
   const coreSettings = useMemo<SettingCard[]>(
     () => [
       {
         title: "Security",
-        description: "Enable password protection, manage two-factor authentication, and review sessions.",
+        description: "Use OTP-based sign-in and review future session controls.",
         icon: <Lock size={18} className="text-printa-red" />,
         action: () => setActiveModal("security"),
       },
@@ -215,7 +199,7 @@ const SettingsPage = () => {
             Security Settings
           </span>
         }
-        description="Manage your account security preferences"
+        description="OTP sign-in is active. Account security preferences are not yet configured."
       >
         <div className="space-y-4 py-4">
           <div className="flex items-center justify-between">
@@ -223,24 +207,14 @@ const SettingsPage = () => {
               <Label htmlFor="two-factor" className="text-sm font-medium">Two-Factor Authentication</Label>
               <p className="text-xs text-gray-500">Add an extra layer of security</p>
             </div>
-            <Switch
-              id="two-factor"
-              checked={twoFactorEnabled}
-              onCheckedChange={setTwoFactorEnabled}
-              className="data-[state=checked]:bg-printa-red"
-            />
+            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="session" className="text-sm font-medium">Auto Session Timeout</Label>
               <p className="text-xs text-gray-500">Log out after 30 minutes of inactivity</p>
             </div>
-            <Switch
-              id="session"
-              checked={sessionTimeout}
-              onCheckedChange={setSessionTimeout}
-              className="data-[state=checked]:bg-printa-red"
-            />
+            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
         </div>
         <div className="flex justify-end gap-2">
@@ -250,7 +224,7 @@ const SettingsPage = () => {
           <Button
             className="bg-printa-red hover:bg-printa-red/90 rounded-xl"
             onClick={() => {
-              toast.success("Security settings saved");
+              toast.error("Security preferences are not configured for vendor accounts yet.");
               setActiveModal(null);
             }}
           >
@@ -269,7 +243,7 @@ const SettingsPage = () => {
             Notification Preferences
           </span>
         }
-        description="Choose how you want to receive updates"
+        description="Notification preferences are not yet configured for vendor accounts."
       >
         <div className="space-y-4 py-4">
           <div className="flex items-center justify-between">
@@ -277,48 +251,28 @@ const SettingsPage = () => {
               <Label htmlFor="email-notif" className="text-sm font-medium">Email Notifications</Label>
               <p className="text-xs text-gray-500">Receive updates via email</p>
             </div>
-            <Switch
-              id="email-notif"
-              checked={emailNotifications}
-              onCheckedChange={setEmailNotifications}
-              className="data-[state=checked]:bg-printa-red"
-            />
+            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="sms-notif" className="text-sm font-medium">SMS Notifications</Label>
               <p className="text-xs text-gray-500">Receive updates via text message</p>
             </div>
-            <Switch
-              id="sms-notif"
-              checked={smsNotifications}
-              onCheckedChange={setSmsNotifications}
-              className="data-[state=checked]:bg-printa-red"
-            />
+            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="order-updates" className="text-sm font-medium">Order Updates</Label>
               <p className="text-xs text-gray-500">Get notified about order status changes</p>
             </div>
-            <Switch
-              id="order-updates"
-              checked={orderUpdates}
-              onCheckedChange={setOrderUpdates}
-              className="data-[state=checked]:bg-printa-red"
-            />
+            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="promotions" className="text-sm font-medium">Promotions & Offers</Label>
               <p className="text-xs text-gray-500">Receive special deals and discounts</p>
             </div>
-            <Switch
-              id="promotions"
-              checked={promotions}
-              onCheckedChange={setPromotions}
-              className="data-[state=checked]:bg-printa-red"
-            />
+            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
         </div>
         <div className="flex justify-end gap-2">
@@ -328,7 +282,7 @@ const SettingsPage = () => {
           <Button
             className="bg-printa-red hover:bg-printa-red/90 rounded-xl"
             onClick={() => {
-              toast.success("Notification preferences saved");
+              toast.error("Notification preferences are not configured for vendor accounts yet.");
               setActiveModal(null);
             }}
           >
@@ -347,7 +301,7 @@ const SettingsPage = () => {
             Privacy Settings
           </span>
         }
-        description="Control how your data is used and shared"
+        description="Privacy preferences are not yet configured for vendor accounts."
       >
         <div className="space-y-4 py-4">
           <div className="flex items-center justify-between">
@@ -355,36 +309,21 @@ const SettingsPage = () => {
               <Label htmlFor="analytics" className="text-sm font-medium">Usage Analytics</Label>
               <p className="text-xs text-gray-500">Help us improve by sharing usage data</p>
             </div>
-            <Switch
-              id="analytics"
-              checked={analyticsEnabled}
-              onCheckedChange={setAnalyticsEnabled}
-              className="data-[state=checked]:bg-printa-red"
-            />
+            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="partners" className="text-sm font-medium">Share with Partners</Label>
               <p className="text-xs text-gray-500">Allow data sharing with print partners</p>
             </div>
-            <Switch
-              id="partners"
-              checked={shareWithPartners}
-              onCheckedChange={setShareWithPartners}
-              className="data-[state=checked]:bg-printa-red"
-            />
+            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="location-track" className="text-sm font-medium">Location Services</Label>
               <p className="text-xs text-gray-500">Allow location access for nearby printers</p>
             </div>
-            <Switch
-              id="location-track"
-              checked={locationTracking}
-              onCheckedChange={setLocationTracking}
-              className="data-[state=checked]:bg-printa-red"
-            />
+            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
         </div>
         <div className="flex justify-end gap-2">
@@ -394,7 +333,7 @@ const SettingsPage = () => {
           <Button
             className="bg-printa-red hover:bg-printa-red/90 rounded-xl"
             onClick={() => {
-              toast.success("Privacy settings saved");
+              toast.error("Privacy preferences are not configured for vendor accounts yet.");
               setActiveModal(null);
             }}
           >
@@ -413,7 +352,7 @@ const SettingsPage = () => {
             Select Currency
           </span>
         }
-        description="Choose your preferred currency for pricing"
+        description="Currency preferences are not yet stored on vendor accounts."
       >
         <div className="space-y-2 py-4">
           {availableCurrencies.map((currency) => (
@@ -426,9 +365,7 @@ const SettingsPage = () => {
                   : "border-gray-200 hover:border-gray-300"
               }`}
               onClick={() => {
-                setSelectedCurrency(currency);
-                toast.success(`Currency changed to ${currency.code}`);
-                setActiveModal(null);
+                toast.error("Currency preferences are not configured. Invoices and product prices use their recorded currency.");
               }}
             >
               <div className="text-left">
