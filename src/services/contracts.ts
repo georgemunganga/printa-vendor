@@ -28,6 +28,11 @@ export interface VendorProfileDto {
   updated_at: ISODateString;
 }
 
+export interface OnboardVendorDto {
+  business_name: string;
+  tax_id?: string;
+}
+
 export interface LoginRequestDto {
   email: string;
   password: string;

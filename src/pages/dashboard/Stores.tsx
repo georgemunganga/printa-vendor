@@ -22,8 +22,11 @@ import { useStore } from "@/context/store-context";
 import { useAuth } from "@/context/auth-context";
 import type { Store as StoreType } from "@/types";
 import { inventoryService } from "@/services/inventory.service";
+import { vendorService } from "@/services/vendor.service";
 
 interface StoreFormState {
+  businessName: string;
+  taxId: string;
   name: string;
   address: string;
   city: string;
@@ -33,6 +36,8 @@ interface StoreFormState {
 }
 
 const emptyForm: StoreFormState = {
+  businessName: "",
+  taxId: "",
   name: "",
   address: "",
   city: "",
@@ -43,7 +48,7 @@ const emptyForm: StoreFormState = {
 
 const StoresPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const {
     activeStore,
     availableStores,
@@ -72,6 +77,8 @@ const StoresPage: React.FC = () => {
   const openEditModal = (store: StoreType) => {
     setEditingStore(store);
     setForm({
+      businessName: "",
+      taxId: "",
       name: store.name,
       address: store.address,
       city: store.city || "",
@@ -108,13 +115,28 @@ const StoresPage: React.FC = () => {
 
   const handleSave = async () => {
     if (!user) return;
+    const requiresProfileSetup = !editingStore && !user.businessId;
+    if (requiresProfileSetup && !form.businessName.trim()) {
+      toast.error("Business name is required to create your vendor profile.");
+      return;
+    }
     if (!form.name.trim() || !form.address.trim() || !form.city.trim() || !form.country.trim()) {
       toast.error("Store name, address, city, and country are required.");
       return;
     }
 
+    let profileCreated = false;
     setIsSaving(true);
     try {
+      if (requiresProfileSetup) {
+        const vendor = await vendorService.onboard({
+          business_name: form.businessName.trim(),
+          tax_id: form.taxId.trim() || undefined,
+        });
+        updateUser({ businessId: vendor.id, businessName: vendor.business_name });
+        profileCreated = true;
+      }
+
       if (editingStore) {
         const payload = {
           name: form.name,
@@ -136,13 +158,13 @@ const StoresPage: React.FC = () => {
           phone: form.phone,
           email: form.email,
         });
-        toast.success("Store created.");
+        toast.success(profileCreated ? "Business profile and store created." : "Store created.");
       }
       await refreshStores();
       closeModal(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to save store.";
-      toast.error(message);
+      toast.error(profileCreated ? `Business profile created, but the store could not be created. ${message}` : message);
       setIsSaving(false);
     }
   };
@@ -187,7 +209,7 @@ const StoresPage: React.FC = () => {
             onClick={openAddModal}
           >
             <Plus size={16} />
-            <span className="hidden md:inline">Add Store</span>
+            <span className="hidden md:inline">{user?.businessId ? "Add Store" : "Set Up Business"}</span>
           </button>
         </div>
         {activeStore && (
@@ -330,15 +352,19 @@ const StoresPage: React.FC = () => {
           <div className="w-14 h-14 rounded-2xl bg-gray-200 flex items-center justify-center mx-auto mb-3">
             <Store size={24} className="text-gray-400" />
           </div>
-          <p className="text-sm font-semibold text-gray-700">No stores yet</p>
-          <p className="text-xs text-gray-500 mt-1">Add your first store to get started</p>
+          <p className="text-sm font-semibold text-gray-700">{user?.businessId ? "No stores yet" : "Complete your business setup"}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {user?.businessId
+              ? "Add your first store to get started"
+              : "Create your vendor profile and first store with durable Printa records."}
+          </p>
           <button
             type="button"
             className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-printa-red px-4 py-2.5 text-xs font-semibold text-white transition active:scale-95"
             onClick={openAddModal}
           >
             <Plus size={14} />
-            Add Store
+            {user?.businessId ? "Add Store" : "Set Up Business"}
           </button>
         </motion.div>
       )}
@@ -346,9 +372,36 @@ const StoresPage: React.FC = () => {
       <ResponsiveModal
         open={isModalOpen}
         onOpenChange={closeModal}
-        title={editingStore ? "Edit Store" : "Create Store"}
+        title={editingStore ? "Edit Store" : user?.businessId ? "Create Store" : "Set Up Your Business"}
       >
         <div className="space-y-4">
+          {!editingStore && !user?.businessId && (
+            <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-gray-700">
+              Create your vendor profile and first store with the details you enter here. Tax ID is optional.
+            </div>
+          )}
+          {!editingStore && !user?.businessId && (
+            <div className="space-y-2">
+              <Label htmlFor="business-name">Business Name</Label>
+              <Input
+                id="business-name"
+                value={form.businessName}
+                onChange={(e) => setForm((prev) => ({ ...prev, businessName: e.target.value }))}
+                placeholder="FastPrint Lusaka"
+              />
+            </div>
+          )}
+          {!editingStore && !user?.businessId && (
+            <div className="space-y-2">
+              <Label htmlFor="tax-id">Tax ID (optional)</Label>
+              <Input
+                id="tax-id"
+                value={form.taxId}
+                onChange={(e) => setForm((prev) => ({ ...prev, taxId: e.target.value }))}
+                placeholder="Enter your tax ID if available"
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="store-name">Store Name</Label>
             <Input
@@ -411,7 +464,7 @@ const StoresPage: React.FC = () => {
               Cancel
             </Button>
             <Button onClick={() => void handleSave()} disabled={isSaving}>
-              {isSaving ? "Saving..." : editingStore ? "Save Changes" : "Create Store"}
+              {isSaving ? "Saving..." : editingStore ? "Save Changes" : user?.businessId ? "Create Store" : "Create Profile & Store"}
             </Button>
           </div>
         </div>
