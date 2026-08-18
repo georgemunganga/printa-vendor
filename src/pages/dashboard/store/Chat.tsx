@@ -4,13 +4,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Check, CheckCheck, MessageCircle, FileText, ExternalLink, Paperclip, X, File } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { mockOrders } from "@/data/mockOrders";
-import { PrintJob } from "@/types";
+import { PrintJob, PrintJobStatus } from "@/types";
+import type { OrderDto, OrderStatusDto } from "@/services/contracts";
+import { ordersService } from "@/services/orders.service";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import { BackButton } from "@/components/dashboard/BackButton";
 import { useStore } from "@/context/store-context";
-import { scopeItemsByActiveStore } from "@/lib/store-scope";
 
 interface Attachment {
   id: string;
@@ -42,20 +42,59 @@ interface ChatThread {
   unreadCount: number;
 }
 
-// Generate mock chat threads from orders
-const getMockThreads = (orders: PrintJob[]): ChatThread[] =>
+const toPrintJobStatus = (status: OrderStatusDto): PrintJobStatus => {
+  switch (status) {
+    case "PENDING":
+      return "pending";
+    case "CONFIRMED":
+    case "IN_PRODUCTION":
+      return "printing";
+    case "READY":
+      return "ready";
+    case "DELIVERED":
+      return "delivered";
+    case "CANCELLED":
+      return "cancelled";
+  }
+};
+
+const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
+  const items = order.items ?? [];
+  const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
+  const customerName = order.customer_id ? `Customer ${order.customer_id.slice(0, 8)}` : "Walk-in customer";
+
+  return {
+    id: order.id,
+    fileName: order.order_number,
+    status: toPrintJobStatus(order.status),
+    totalPrice: order.total,
+    pageCount: copies,
+    copies,
+    colorMode: "color",
+    printer: { name: customerName },
+    createdAt: new Date(order.created_at),
+    lastUpdated: new Date(order.updated_at),
+    customerName,
+    deliveryType: order.delivery_address ? "rider" : "pickup",
+    orderChannel: order.channel === "POS" ? "walk-in" : "online",
+    notes: order.notes,
+    statusHistory: [{ status: toPrintJobStatus(order.status), timestamp: new Date(order.updated_at) }],
+  };
+};
+
+const getOrderThreads = (orders: PrintJob[]): ChatThread[] =>
   orders
-    .filter((o) => o.status !== "cancelled")
+    .filter((order) => order.status !== "cancelled")
     .map((order) => ({
       order,
       lastMessage:
         order.status === "ready"
-          ? "Your order is ready for pickup!"
+          ? "Order status: Ready for pickup"
           : order.status === "printing"
-          ? "We're printing your documents now."
-          : "Thanks for your order!",
-      lastMessageTime: new Date(Date.now() - Math.random() * 86400000),
-      unreadCount: Math.random() > 0.6 ? Math.floor(Math.random() * 3) + 1 : 0,
+          ? "Order status: In production"
+          : "Order status: Received",
+      lastMessageTime: order.lastUpdated ?? order.createdAt,
+      unreadCount: 0,
     }))
     .sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
 
@@ -583,23 +622,48 @@ const ChatPage = () => {
   const navigate = useNavigate();
   const { activeStore } = useStore();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const scopedOrders = useMemo(
-    () => scopeItemsByActiveStore(mockOrders, activeStore?.id),
-    [activeStore?.id]
-  );
-  const [threads, setThreads] = useState<ChatThread[]>(() => getMockThreads(scopedOrders));
+  const [storeOrders, setStoreOrders] = useState<PrintJob[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(orderId ?? null);
+  const threads = useMemo(() => getOrderThreads(storeOrders), [storeOrders]);
 
   const activeOrder = activeOrderId
-    ? scopedOrders.find((o) => o.id === activeOrderId)
+    ? storeOrders.find((order) => order.id === activeOrderId)
     : null;
 
   useEffect(() => {
-    setThreads(getMockThreads(scopedOrders));
-    setMessages([]);
-    setActiveOrderId(null);
-  }, [scopedOrders]);
+    let cancelled = false;
+
+    void (async () => {
+      if (!activeStore?.id) {
+        if (!cancelled) {
+          setStoreOrders([]);
+          setMessages([]);
+          setActiveOrderId(null);
+        }
+        return;
+      }
+
+      try {
+        const orders = await ordersService.listByStore(activeStore.id);
+        if (!cancelled) {
+          setStoreOrders(orders.map(mapOrderToPrintJob));
+          setMessages([]);
+        }
+      } catch {
+        // The conversation list must remain empty rather than use fabricated order threads.
+        if (!cancelled) {
+          setStoreOrders([]);
+          setMessages([]);
+          setActiveOrderId(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStore?.id]);
 
   useEffect(() => {
     if (activeOrderId) {
