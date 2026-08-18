@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -17,10 +17,10 @@ import { BackButton } from "@/components/dashboard/BackButton";
 import { Button } from "@/components/ui/button";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { toast } from "sonner";
-import { mockOrders } from "@/data/mockOrders";
 import { DEFAULT_LOCATIONS } from "@/data/locations";
 import { useStore } from "@/context/store-context";
-import { scopeItemsByActiveStore } from "@/lib/store-scope";
+import { ordersService } from "@/services/orders.service";
+import type { OrderDto } from "@/services/contracts";
 
 const MapPicker = lazy(() => import("@/components/MapPicker"));
 
@@ -52,12 +52,35 @@ const TrackingPage = () => {
   const { activeStore } = useStore();
   const [showPanel, setShowPanel] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const scopedOrders = scopeItemsByActiveStore(mockOrders, activeStore?.id);
+  const [storeOrders, setStoreOrders] = useState<OrderDto[]>([]);
 
-  // Get order if ID provided, otherwise show all active orders
-  const order = id ? scopedOrders.find((o) => o.id === id) : null;
-  const activeOrders = scopedOrders.filter(
-    (o) => o.status === "printing" || o.status === "ready"
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      if (!activeStore?.id) {
+        if (!cancelled) setStoreOrders([]);
+        return;
+      }
+
+      try {
+        const orders = await ordersService.listByStore(activeStore.id);
+        if (!cancelled) setStoreOrders(orders);
+      } catch {
+        // Tracking must remain empty rather than displaying fabricated delivery work.
+        if (!cancelled) setStoreOrders([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStore?.id]);
+
+  // Get the selected live order, or show live work that is currently in production or ready.
+  const order = id ? storeOrders.find((storeOrder) => storeOrder.id === id) : null;
+  const activeOrders = storeOrders.filter(
+    (storeOrder) => storeOrder.status === "IN_PRODUCTION" || storeOrder.status === "READY"
   );
 
   const handleLogout = () => {
@@ -208,18 +231,20 @@ const TrackingPage = () => {
 
               {/* Orders Timeline */}
               <div className="flex-1 overflow-y-auto p-4">
-                {activeOrders.slice(0, 2).map((orderItem) => (
+                {activeOrders.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-gray-500">No active orders to track.</p>
+                ) : activeOrders.slice(0, 2).map((orderItem) => (
                   <div key={orderItem.id} className="mb-6">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-sm font-semibold text-gray-900">Order ID: {orderItem.id}</p>
+                      <p className="text-sm font-semibold text-gray-900">Order ID: {orderItem.order_number}</p>
                       <span
                         className={`text-xs px-2 py-1 rounded-full font-medium ${
-                          orderItem.status === "ready"
+                          orderItem.status === "READY"
                             ? "bg-emerald-100 text-emerald-600"
                             : "bg-amber-100 text-amber-600"
                         }`}
                       >
-                        {orderItem.status === "ready" ? "Ready" : "Pending"}
+                        {orderItem.status === "READY" ? "Ready" : "In production"}
                       </span>
                     </div>
 
@@ -339,7 +364,7 @@ const TrackingPage = () => {
                 {mockTrackingStats.totalDistance} <span className="text-gray-400 font-normal">•</span> {mockTrackingStats.estimatedArrival}
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                {order?.printer.address || activeStore?.address || "Store location unavailable"}
+                {activeStore?.address || "Store location unavailable"}
               </p>
             </div>
 
@@ -390,7 +415,9 @@ const TrackingPage = () => {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
                 Order Details
               </p>
-              {activeOrders.slice(0, 2).map((orderItem) => (
+              {activeOrders.length === 0 ? (
+                <p className="py-6 text-center text-sm text-gray-500">No active orders to track.</p>
+              ) : activeOrders.slice(0, 2).map((orderItem) => (
                 <button
                   key={orderItem.id}
                   onClick={() => navigate(`/dashboard/order/${orderItem.id}`)}
@@ -401,18 +428,18 @@ const TrackingPage = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">
-                      {orderItem.fileName}
+                      Order {orderItem.order_number}
                     </p>
-                    <p className="text-xs text-gray-500">{orderItem.printer.name}</p>
+                    <p className="text-xs text-gray-500">{activeStore?.name ?? "Active store"}</p>
                   </div>
                   <span
                     className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      orderItem.status === "ready"
+                      orderItem.status === "READY"
                         ? "bg-emerald-100 text-emerald-600"
                         : "bg-amber-100 text-amber-600"
                     }`}
                   >
-                    {orderItem.status === "ready" ? "Ready" : "Pending"}
+                    {orderItem.status === "READY" ? "Ready" : "In production"}
                   </span>
                 </button>
               ))}
