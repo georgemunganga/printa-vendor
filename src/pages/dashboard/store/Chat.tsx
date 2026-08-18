@@ -7,10 +7,12 @@ import { toast } from "sonner";
 import { PrintJob, PrintJobStatus } from "@/types";
 import type { OrderDto, OrderStatusDto } from "@/services/contracts";
 import { ordersService } from "@/services/orders.service";
+import { conversationService, type ConversationMessageDto } from "@/services/conversation.service";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import { BackButton } from "@/components/dashboard/BackButton";
 import { useStore } from "@/context/store-context";
+import { useAuth } from "@/context/auth-context";
 
 interface Attachment {
   id: string;
@@ -98,50 +100,13 @@ const getOrderThreads = (orders: PrintJob[]): ChatThread[] =>
     }))
     .sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
 
-const getMockMessages = (orderId: string): ChatMessage[] => [
-  {
-    id: "msg-1",
-    senderId: "vendor",
-    message: `Hi! Thanks for your order. We've received your files and are reviewing them now.`,
-    timestamp: new Date(Date.now() - 3600000 * 2),
-    status: "read",
-  },
-  {
-    id: "msg-2",
-    senderId: "user",
-    message: "Great! How long will the review take?",
-    timestamp: new Date(Date.now() - 3600000 * 1.5),
-    status: "read",
-  },
-  {
-    id: "msg-3",
-    senderId: "vendor",
-    message: "Usually about 15-30 minutes. We'll notify you once we start printing.",
-    timestamp: new Date(Date.now() - 3600000 * 1.4),
-    status: "read",
-  },
-  {
-    id: "msg-4",
-    senderId: "vendor",
-    message: "Quick question - would you prefer glossy or matte finish?",
-    timestamp: new Date(Date.now() - 3600000),
-    status: "read",
-  },
-  {
-    id: "msg-5",
-    senderId: "user",
-    message: "Matte finish please.",
-    timestamp: new Date(Date.now() - 1800000),
-    status: "read",
-  },
-  {
-    id: "msg-6",
-    senderId: "vendor",
-    message: "Perfect! Your order should be ready soon.",
-    timestamp: new Date(Date.now() - 900000),
-    status: "delivered",
-  },
-];
+const mapConversationMessage = (message: ConversationMessageDto, currentUserID?: string): ChatMessage => ({
+  id: message.id,
+  senderId: message.sender_id === currentUserID ? "user" : "vendor",
+  message: message.body,
+  timestamp: new Date(message.created_at),
+  status: message.read_at ? "read" : message.delivered_at ? "delivered" : "sent",
+});
 
 const formatTime = (date: Date) =>
   date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
@@ -621,6 +586,7 @@ const ChatPage = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const { activeStore } = useStore();
+  const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [storeOrders, setStoreOrders] = useState<PrintJob[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -666,10 +632,30 @@ const ChatPage = () => {
   }, [activeStore?.id]);
 
   useEffect(() => {
-    if (activeOrderId) {
-      setMessages(getMockMessages(activeOrderId));
+    let cancelled = false;
+
+    if (!activeOrderId) {
+      setMessages([]);
+      return;
     }
-  }, [activeOrderId]);
+
+    void (async () => {
+      try {
+        const liveMessages = await conversationService.listMessages(activeOrderId);
+        if (!cancelled) {
+          setMessages(liveMessages.map((message) => mapConversationMessage(message, user?.id)));
+        }
+      } catch {
+        if (!cancelled) {
+          setMessages([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeOrderId, user?.id]);
 
   useEffect(() => {
     if (orderId) {
@@ -687,22 +673,20 @@ const ChatPage = () => {
     navigate(`/dashboard/chat/${id}`, { replace: true });
   };
 
-  const handleSendMessage = (text: string, attachments?: Attachment[]) => {
-    const message: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      senderId: "user",
-      message: text,
-      timestamp: new Date(),
-      status: "sent",
-      attachments,
-    };
-    setMessages((prev) => [...prev, message]);
+  const handleSendMessage = async (text: string, attachments?: Attachment[]) => {
+    if (!activeOrderId) return;
+    if (attachments && attachments.length > 0) {
+      toast.error("Chat attachments are not available yet. Please send a text message or use the order design upload flow.");
+      return;
+    }
+    if (!text.trim()) return;
 
-    setTimeout(() => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === message.id ? { ...m, status: "delivered" as const } : m))
-      );
-    }, 1000);
+    try {
+      const sent = await conversationService.sendMessage(activeOrderId, text.trim());
+      setMessages((prev) => [...prev, mapConversationMessage(sent, user?.id)]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send this message.");
+    }
   };
 
   const handleBack = () => {
