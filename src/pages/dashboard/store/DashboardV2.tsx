@@ -207,8 +207,9 @@ const DashboardV2: React.FC = () => {
         }
       } catch {
         if (!cancelled) {
-          setJobs(toFallbackJobs(activeStore.id));
-          setIsUsingFallback(true);
+          // Operational queues must not fabricate orders when the live API is unavailable.
+          setJobs([]);
+          setIsUsingFallback(false);
         }
       }
     })();
