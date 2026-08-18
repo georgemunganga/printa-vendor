@@ -20,6 +20,7 @@ interface Attachment {
   type: "image" | "file";
   url: string;
   size: number;
+  sourceFile?: File;
 }
 
 interface ChatMessage {
@@ -100,13 +101,32 @@ const getOrderThreads = (orders: PrintJob[]): ChatThread[] =>
     }))
     .sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
 
-const mapConversationMessage = (message: ConversationMessageDto, currentUserID?: string): ChatMessage => ({
-  id: message.id,
-  senderId: message.sender_id === currentUserID ? "user" : "vendor",
-  message: message.body,
-  timestamp: new Date(message.created_at),
-  status: message.read_at ? "read" : message.delivered_at ? "delivered" : "sent",
-});
+const mapConversationMessage = async (message: ConversationMessageDto, currentUserID?: string): Promise<ChatMessage> => {
+  const attachments = await Promise.all(
+    (message.attachments ?? []).map(async (attachment) => {
+      try {
+        return {
+          id: attachment.asset_id,
+          name: attachment.name,
+          type: attachment.content_type.startsWith("image/") ? "image" as const : "file" as const,
+          url: await conversationService.downloadAttachment(attachment.url),
+          size: attachment.size_bytes,
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return {
+    id: message.id,
+    senderId: message.sender_id === currentUserID ? "user" : "vendor",
+    message: message.body,
+    timestamp: new Date(message.created_at),
+    status: message.read_at ? "read" : message.delivered_at ? "delivered" : "sent",
+    attachments: attachments.filter((attachment): attachment is Attachment => attachment !== null),
+  };
+};
 
 const formatTime = (date: Date) =>
   date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
@@ -280,7 +300,7 @@ const EmptyState: React.FC = () => (
 const ChatView: React.FC<{
   order: PrintJob;
   messages: ChatMessage[];
-  onSendMessage: (message: string, attachments?: Attachment[]) => void;
+  onSendMessage: (message: string, attachments?: Attachment[]) => Promise<boolean>;
   onBack?: () => void;
   showBackButton?: boolean;
 }> = ({ order, messages, onSendMessage, onBack, showBackButton }) => {
@@ -304,6 +324,7 @@ const ChatView: React.FC<{
       type: file.type.startsWith("image/") ? "image" : "file",
       url: URL.createObjectURL(file),
       size: file.size,
+      sourceFile: file,
     }));
 
     setAttachments((prev) => [...prev, ...newAttachments]);
@@ -318,9 +339,11 @@ const ChatView: React.FC<{
     });
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!newMessage.trim() && attachments.length === 0) return;
-    onSendMessage(newMessage.trim(), attachments.length > 0 ? attachments : undefined);
+    const sent = await onSendMessage(newMessage.trim(), attachments.length > 0 ? attachments : undefined);
+    if (!sent) return;
+    attachments.forEach((attachment) => URL.revokeObjectURL(attachment.url));
     setNewMessage("");
     setAttachments([]);
     inputRef.current?.focus();
@@ -642,8 +665,9 @@ const ChatPage = () => {
     void (async () => {
       try {
         const liveMessages = await conversationService.listMessages(activeOrderId);
+        const mappedMessages = await Promise.all(liveMessages.map((message) => mapConversationMessage(message, user?.id)));
         if (!cancelled) {
-          setMessages(liveMessages.map((message) => mapConversationMessage(message, user?.id)));
+          setMessages(mappedMessages);
         }
       } catch {
         if (!cancelled) {
@@ -673,19 +697,22 @@ const ChatPage = () => {
     navigate(`/dashboard/chat/${id}`, { replace: true });
   };
 
-  const handleSendMessage = async (text: string, attachments?: Attachment[]) => {
-    if (!activeOrderId) return;
-    if (attachments && attachments.length > 0) {
-      toast.error("Chat attachments are not available yet. Please send a text message or use the order design upload flow.");
-      return;
-    }
-    if (!text.trim()) return;
-
+  const handleSendMessage = async (text: string, attachments?: Attachment[]): Promise<boolean> => {
+    if (!activeOrderId || (!text.trim() && !attachments?.length)) return false;
     try {
-      const sent = await conversationService.sendMessage(activeOrderId, text.trim());
-      setMessages((prev) => [...prev, mapConversationMessage(sent, user?.id)]);
+      const uploadedAssets = await Promise.all(
+        (attachments ?? []).map(async (attachment) => {
+          if (!attachment.sourceFile) throw new Error("Attachment source is no longer available. Please select it again.");
+          return conversationService.uploadAttachment(attachment.sourceFile);
+        }),
+      );
+      const sent = await conversationService.sendMessage(activeOrderId, text.trim(), uploadedAssets.map((asset) => asset.asset_id));
+      const mappedMessage = await mapConversationMessage(sent, user?.id);
+      setMessages((previous) => [...previous, mappedMessage]);
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to send this message.");
+      return false;
     }
   };
 
