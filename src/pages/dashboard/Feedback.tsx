@@ -74,22 +74,8 @@ const FeedbackPage = () => {
       return;
     }
 
-    setIsSubmitting(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    toast.success("Thank you for your feedback! We'll review it shortly.");
-    setIsSubmitting(false);
-
-    // Reset form
-    setSelectedType(null);
-    setFormData({ subject: "", message: "", email: "" });
-
-    // Navigate back to support after a brief delay
-    setTimeout(() => {
-      navigate("/dashboard/support");
-    }, 1000);
+    // Feedback persistence is not configured yet. Do not claim that it was submitted.
+    toast.error("Feedback submissions are not configured yet. Please use the published support contact channels.");
   };
 
   const selectedCategory = feedbackCategories.find((c) => c.id === selectedType);

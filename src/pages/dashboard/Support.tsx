@@ -46,16 +46,8 @@ const SupportPage = () => {
       return;
     }
 
-    setIsSubmitting(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    toast.success("Message sent! We'll get back to you within 24 hours.");
-    setIsSubmitting(false);
-
-    // Reset form
-    setFormData({ name: "", email: "", topic: "", message: "" });
+    // Support tickets are not yet backed by a durable service. Do not claim a message was sent.
+    toast.error("Support requests are not configured yet. Please use the published support contact channels.");
   };
 
   return (
