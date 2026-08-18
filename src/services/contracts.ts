@@ -122,6 +122,24 @@ export interface StoreDto {
   updated_at: ISODateString;
 }
 
+export interface DeliveryZoneDto {
+  id: UUID;
+  store_id: UUID;
+  name: string;
+  city: string;
+  country: string;
+  is_active: boolean;
+  created_at: ISODateString;
+  updated_at: ISODateString;
+}
+
+export interface DeliveryZoneInputDto {
+  name: string;
+  city: string;
+  country?: string;
+  is_active: boolean;
+}
+
 export interface CreateStoreDto {
   vendor_id: UUID;
   name: string;

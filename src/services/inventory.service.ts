@@ -5,6 +5,8 @@ import type {
   StoreStaffDto,
   UpdateStoreDto,
   VendorStoreProductDto,
+  DeliveryZoneDto,
+  DeliveryZoneInputDto,
 } from "./contracts";
 
 export const inventoryService = {
@@ -28,6 +30,22 @@ export const inventoryService = {
 
   deleteStore(storeId: string) {
     return api.delete(`/api/v1/inventory/stores/${storeId}`);
+  },
+
+  listDeliveryZones(storeId: string) {
+    return api.get<DeliveryZoneDto[]>(`/api/v1/delivery/stores/${storeId}/zones`);
+  },
+
+  createDeliveryZone(storeId: string, payload: DeliveryZoneInputDto) {
+    return api.post<DeliveryZoneDto>(`/api/v1/delivery/stores/${storeId}/zones`, payload);
+  },
+
+  updateDeliveryZone(storeId: string, zoneId: string, payload: DeliveryZoneInputDto) {
+    return api.patch<DeliveryZoneDto>(`/api/v1/delivery/stores/${storeId}/zones/${zoneId}`, payload);
+  },
+
+  deleteDeliveryZone(storeId: string, zoneId: string) {
+    return api.delete(`/api/v1/delivery/stores/${storeId}/zones/${zoneId}`);
   },
 
   listStaff(storeId: string) {
