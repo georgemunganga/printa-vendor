@@ -61,7 +61,7 @@ export const buildAuthUserFromApiToken = async (token: string): Promise<AuthUser
       role,
       permissions: ROLE_PERMISSIONS[role],
       businessId: vendor?.id || "",
-      businessName: vendor?.business_name || "Unassigned vendor",
+      businessName: vendor?.business_name || "Vendor profile setup required",
     };
   } catch {
     return {
@@ -72,7 +72,7 @@ export const buildAuthUserFromApiToken = async (token: string): Promise<AuthUser
       role,
       permissions: ROLE_PERMISSIONS[role],
       businessId: "",
-      businessName: "Unassigned vendor",
+      businessName: role === "vendor" ? "Vendor profile setup required" : "Printa account",
     };
   }
 };
