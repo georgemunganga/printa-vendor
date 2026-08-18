@@ -40,60 +40,6 @@ const NOTIFICATION_COLORS = {
   system: "bg-printa-red/10 text-printa-red",
 };
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: "notif-1",
-    type: "order",
-    title: "New order received",
-    message: "Order #1234 from John Doe - 50 pages color print",
-    timestamp: new Date(Date.now() - 1000 * 60 * 5), // 5 min ago
-    read: false,
-    actionUrl: "/dashboard/orders",
-  },
-  {
-    id: "notif-2",
-    type: "payment",
-    title: "Payment received",
-    message: "K150 payment received for Order #1233",
-    timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 min ago
-    read: false,
-  },
-  {
-    id: "notif-3",
-    type: "team",
-    title: "New team member added",
-    message: "Sarah Johnson joined as Manager",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-    read: true,
-    actionUrl: "/dashboard/team",
-  },
-  {
-    id: "notif-4",
-    type: "order",
-    title: "Order completed",
-    message: "Order #1232 has been marked as delivered",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5), // 5 hours ago
-    read: true,
-  },
-  {
-    id: "notif-5",
-    type: "system",
-    title: "Subscription renewal",
-    message: "Your Pro plan will renew on Mar 15, 2026",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-    read: true,
-    actionUrl: "/dashboard/subscription",
-  },
-  {
-    id: "notif-6",
-    type: "payment",
-    title: "Low balance alert",
-    message: "Your account balance is below K50",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
-    read: true,
-  },
-];
-
 const toNotification = (dto: NotificationDto): Notification => {
   const type = dto.type.toLowerCase();
   return {
@@ -108,7 +54,8 @@ const toNotification = (dto: NotificationDto): Notification => {
 
 const Notifications: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isUsingFallback, setIsUsingFallback] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [filter, setFilter] = useState<"all" | "unread">("all");
 
   useEffect(() => {
@@ -118,19 +65,19 @@ const Notifications: React.FC = () => {
         const response = await notificationsService.list({ limit: 100 });
         if (!cancelled) {
           setNotifications(response.notifications.map(toNotification));
-          setIsUsingFallback(false);
+          setLoadError(null);
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setNotifications(MOCK_NOTIFICATIONS);
-          setIsUsingFallback(true);
+          setNotifications([]);
+          setLoadError(error instanceof Error ? error.message : "Unable to load notifications.");
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -141,7 +88,7 @@ const Notifications: React.FC = () => {
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      if (!isUsingFallback) await notificationsService.markRead(id);
+      await notificationsService.markRead(id);
       setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
       toast.success("Marked as read");
     } catch (error) {
@@ -151,7 +98,7 @@ const Notifications: React.FC = () => {
 
   const handleMarkAllAsRead = async () => {
     try {
-      if (!isUsingFallback) await notificationsService.markAllRead();
+      await notificationsService.markAllRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       toast.success("All notifications marked as read");
     } catch (error) {
@@ -161,7 +108,7 @@ const Notifications: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      if (!isUsingFallback) await notificationsService.delete(id);
+      await notificationsService.delete(id);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
       toast.success("Notification deleted");
     } catch (error) {
@@ -251,10 +198,21 @@ const Notifications: React.FC = () => {
                 No notifications
               </h3>
               <p className="text-sm text-gray-500">
-                {filter === "unread"
-                  ? "You're all caught up!"
-                  : "You don't have any notifications yet"}
+                {loadError
+                  ? loadError
+                  : filter === "unread"
+                    ? "You're all caught up!"
+                    : "You don't have any notifications yet"}
               </p>
+              {loadError && (
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((current) => current + 1)}
+                  className="mt-3 text-xs font-semibold text-printa-red hover:underline"
+                >
+                  Try again
+                </button>
+              )}
             </div>
           ) : (
             filteredNotifications.map((notification) => {

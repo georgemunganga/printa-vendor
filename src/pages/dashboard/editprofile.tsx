@@ -6,6 +6,7 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { useAuth } from "@/context/auth-context";
 import { useStore } from "@/context/store-context";
 import { ordersService } from "@/services/orders.service";
+import { usersService } from "@/services/users.service";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { User, Mail, Phone, Calendar, MapPin, CheckCircle, ShoppingBag } from "lucide-react";
@@ -60,7 +61,7 @@ const EditProfilePage = () => {
     };
   }, [activeStore?.id]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!isEditing) {
       setIsEditing(true);
       return;
@@ -71,27 +72,29 @@ const EditProfilePage = () => {
       return;
     }
 
-    if (!formData.email.trim() || !formData.email.includes("@")) {
-      toast.error("Please provide a valid email");
-      return;
-    }
-
-    if (!formData.phone.trim() || formData.phone.length < 10) {
-      toast.error("Please provide a valid phone number");
-      return;
-    }
+    const nameParts = formData.name.trim().split(/\s+/);
+    const firstName = nameParts.shift() ?? "";
+    const lastName = nameParts.join(" ") || firstName;
 
     setIsSaving(true);
-    setTimeout(() => {
+    try {
+      await usersService.updateMyProfile({
+        first_name: firstName,
+        last_name: lastName,
+        phone: formData.phone.trim(),
+      });
       updateUser({
-        name: formData.name,
+        name: formData.name.trim(),
         email: formData.email,
-        phone: formData.phone,
+        phone: formData.phone.trim(),
       });
       setIsEditing(false);
-      setIsSaving(false);
       toast.success("Profile updated");
-    }, 600);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to update profile.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -106,11 +109,11 @@ const EditProfilePage = () => {
   };
 
   const formFields = [
-    { key: "name", label: "Full Name", icon: User, type: "text", placeholder: "Enter your full name" },
-    { key: "email", label: "Email", icon: Mail, type: "email", placeholder: "Enter your email" },
-    { key: "phone", label: "Phone", icon: Phone, type: "tel", placeholder: "Enter phone number" },
-    { key: "dateOfBirth", label: "Birthday", icon: Calendar, type: "text", placeholder: "DD/MM/YYYY" },
-    { key: "address", label: "Address", icon: MapPin, type: "text", placeholder: "Enter your address" },
+    { key: "name", label: "Full Name", icon: User, type: "text", placeholder: "Enter your full name", persisted: true },
+    { key: "email", label: "Email", icon: Mail, type: "email", placeholder: "Email is verified through OTP", persisted: false },
+    { key: "phone", label: "Phone", icon: Phone, type: "tel", placeholder: "Enter phone number", persisted: true },
+    { key: "dateOfBirth", label: "Birthday", icon: Calendar, type: "text", placeholder: "Not stored yet", persisted: false },
+    { key: "address", label: "Address", icon: MapPin, type: "text", placeholder: "Manage delivery details per store", persisted: false },
   ];
 
   return (
@@ -173,11 +176,11 @@ const EditProfilePage = () => {
                     <Input
                       type={field.type}
                       value={formData[field.key as keyof typeof formData]}
-                      disabled={!isEditing}
+                      disabled={!isEditing || !field.persisted}
                       onChange={(event) => setFormData({ ...formData, [field.key]: event.target.value })}
                       placeholder={field.placeholder}
                       className={`border-0 p-0 h-auto text-sm font-medium focus-visible:ring-0 ${
-                        isEditing ? "text-gray-900" : "text-gray-600"
+                        isEditing && field.persisted ? "text-gray-900" : "text-gray-600"
                       }`}
                     />
                   </div>

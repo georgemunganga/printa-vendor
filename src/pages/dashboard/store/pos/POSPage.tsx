@@ -23,7 +23,6 @@ import { POSOrderSummary, POSRightOrderPanel } from "@/components/dashboard/pos/
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@/context/store-context";
-import { hashString } from "@/lib/store-scope";
 import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
 import { ordersService } from "@/services/orders.service";
@@ -65,68 +64,6 @@ const categories: ServiceCategory[] = [
   { id: "s11", name: "Photo Printing", icon: Camera, color: "text-printa-red", bg: "bg-cyan-50", border: "border-cyan-200" },
 ];
 
-const services: ServiceItem[] = [
-  { id: "s1-a4-bw", categoryId: "s1", name: "A4 B&W Print", price: 2 },
-  { id: "s1-a4-color", categoryId: "s1", name: "A4 Color Print", price: 5 },
-  { id: "s1-a3-bw", categoryId: "s1", name: "A3 B&W Print", price: 5 },
-  { id: "s1-a3-color", categoryId: "s1", name: "A3 Color Print", price: 10 },
-  { id: "s1-a5", categoryId: "s1", name: "A5 Print", price: 1.5 },
-  { id: "s1-flyer", categoryId: "s1", name: "Flyer", price: 3 },
-  { id: "s1-brochure", categoryId: "s1", name: "Brochure", price: 15 },
-  { id: "s1-leaflet", categoryId: "s1", name: "Leaflet", price: 4 },
-  { id: "s1-poster-sm", categoryId: "s1", name: "Poster (Small)", price: 20 },
-  { id: "s1-menu", categoryId: "s1", name: "Menu", price: 12 },
-  { id: "s1-invoice", categoryId: "s1", name: "Invoice", price: 2 },
-  { id: "s1-receipt", categoryId: "s1", name: "Receipt Book", price: 35 },
-  { id: "s2-biz-card", categoryId: "s2", name: "Business Cards (x100)", price: 80 },
-  { id: "s2-id-card", categoryId: "s2", name: "ID Card", price: 25 },
-  { id: "s2-loyalty", categoryId: "s2", name: "Loyalty Cards (x100)", price: 65 },
-  { id: "s2-invite", categoryId: "s2", name: "Invitation Card", price: 8 },
-  { id: "s2-greeting", categoryId: "s2", name: "Greeting Card", price: 10 },
-  { id: "s2-letterhead", categoryId: "s2", name: "Letterhead (x100)", price: 90 },
-  { id: "s2-envelope", categoryId: "s2", name: "Envelope (x50)", price: 45 },
-  { id: "s2-notepad", categoryId: "s2", name: "Notepad", price: 30 },
-  { id: "s3-journal", categoryId: "s3", name: "Journal Print", price: 55 },
-  { id: "s3-magazine", categoryId: "s3", name: "Magazine", price: 45 },
-  { id: "s3-newsletter", categoryId: "s3", name: "Newsletter", price: 18 },
-  { id: "s4-booklet", categoryId: "s4", name: "Booklet", price: 25 },
-  { id: "s4-softcover", categoryId: "s4", name: "Softcover Book", price: 65 },
-  { id: "s4-hardcover", categoryId: "s4", name: "Hardcover Book", price: 120 },
-  { id: "s4-spiral", categoryId: "s4", name: "Spiral Binding", price: 15 },
-  { id: "s4-comb", categoryId: "s4", name: "Comb Binding", price: 12 },
-  { id: "s4-calendar", categoryId: "s4", name: "Calendar", price: 40 },
-  { id: "s5-tshirt", categoryId: "s5", name: "T-shirt Print", price: 75 },
-  { id: "s5-polo", categoryId: "s5", name: "Polo Shirt Print", price: 95 },
-  { id: "s5-hoodie", categoryId: "s5", name: "Hoodie Print", price: 150 },
-  { id: "s5-overall", categoryId: "s5", name: "Overall Branding", price: 120 },
-  { id: "s5-lanyard", categoryId: "s5", name: "Lanyard", price: 15 },
-  { id: "s5-apron", categoryId: "s5", name: "Apron Print", price: 55 },
-  { id: "s6-mug", categoryId: "s6", name: "Mug Print", price: 45 },
-  { id: "s6-tumbler", categoryId: "s6", name: "Tumbler Print", price: 60 },
-  { id: "s6-pen", categoryId: "s6", name: "Branded Pen (x50)", price: 85 },
-  { id: "s6-mousepad", categoryId: "s6", name: "Mouse Pad", price: 35 },
-  { id: "s6-keyholder", categoryId: "s6", name: "Key Holder", price: 20 },
-  { id: "s7-banner", categoryId: "s7", name: "Banner (per m2)", price: 85 },
-  { id: "s7-rollup", categoryId: "s7", name: "Roll-up Banner", price: 250 },
-  { id: "s7-xbanner", categoryId: "s7", name: "X-Banner", price: 200 },
-  { id: "s7-backdrop", categoryId: "s7", name: "Backdrop (per m2)", price: 95 },
-  { id: "s7-poster-lg", categoryId: "s7", name: "Poster (Large)", price: 45 },
-  { id: "s7-flag", categoryId: "s7", name: "Flag", price: 120 },
-  { id: "s8-paper", categoryId: "s8", name: "Paper Sticker Sheet", price: 8 },
-  { id: "s8-vinyl", categoryId: "s8", name: "Vinyl Sticker Sheet", price: 15 },
-  { id: "s8-product-label", categoryId: "s8", name: "Product Labels (x100)", price: 45 },
-  { id: "s8-barcode", categoryId: "s8", name: "Barcode Labels (x100)", price: 30 },
-  { id: "s9-vehicle", categoryId: "s9", name: "Vehicle Branding (per m2)", price: 150 },
-  { id: "s9-window", categoryId: "s9", name: "Window Vinyl (per m2)", price: 85 },
-  { id: "s9-wall", categoryId: "s9", name: "Wall Vinyl (per m2)", price: 75 },
-  { id: "s10-box", categoryId: "s10", name: "Product Box", price: 18 },
-  { id: "s10-paperbag", categoryId: "s10", name: "Paper Bag (x50)", price: 60 },
-  { id: "s10-hangtag", categoryId: "s10", name: "Hang Tags (x100)", price: 35 },
-  { id: "s11-passport", categoryId: "s11", name: "Passport Photos (x8)", price: 20 },
-  { id: "s11-4x6", categoryId: "s11", name: "Photo 4x6", price: 5 },
-  { id: "s11-8x10", categoryId: "s11", name: "Photo 8x10", price: 15 },
-  { id: "s11-canvas", categoryId: "s11", name: "Canvas Print", price: 120 },
-];
 
 const TAX_RATE = 0.16;
 
@@ -137,30 +74,24 @@ const POSPage: React.FC = () => {
   const [order, setOrder] = useState<OrderLine[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "ewallet">("cash");
   const [showMobileOrder, setShowMobileOrder] = useState(false);
-  const [liveServices, setLiveServices] = useState<ServiceItem[] | null>(null);
+  const [liveServices, setLiveServices] = useState<ServiceItem[]>([]);
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
+  const [catalogueLoading, setCatalogueLoading] = useState(false);
+  const [catalogueReloadKey, setCatalogueReloadKey] = useState(0);
   const [isCharging, setIsCharging] = useState(false);
-  const priceMultiplier = useMemo(() => {
-    if (!activeStore?.id) return 1;
-    const step = hashString(activeStore.id) % 3; // 0,1,2
-    return 1 + step * 0.05;
-  }, [activeStore?.id]);
 
-  const servicesForStore = useMemo(
-    () => liveServices ?? services.map((service) => ({
-      ...service,
-      price: Number((service.price * priceMultiplier).toFixed(2)),
-    })),
-    [liveServices, priceMultiplier]
-  );
+  const servicesForStore = liveServices;
 
   useEffect(() => {
     setOrder([]);
     setSearch("");
     setActiveCategory("all");
     setShowMobileOrder(false);
-    setLiveServices(null);
+    setLiveServices([]);
+    setCatalogueError(null);
     if (!activeStore?.id) return;
     let cancelled = false;
+    setCatalogueLoading(true);
     void (async () => {
       try {
         const storeProducts = await inventoryService.listProducts(activeStore.id);
@@ -176,12 +107,17 @@ const POSPage: React.FC = () => {
             price: storeProduct.vendor_price,
           })));
         }
-      } catch {
-        // Retain the existing local catalogue only when the inventory API is unavailable.
+      } catch (error) {
+        if (!cancelled) {
+          setLiveServices([]);
+          setCatalogueError(error instanceof Error ? error.message : "Unable to load the store catalogue.");
+        }
+      } finally {
+        if (!cancelled) setCatalogueLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [activeStore?.id]);
+  }, [activeStore?.id, catalogueReloadKey]);
 
   const filtered = useMemo(() => {
     let list = servicesForStore;
@@ -230,7 +166,7 @@ const POSPage: React.FC = () => {
 
   const handleCharge = async () => {
     if (!order.length || isCharging) return;
-    if (!activeStore?.id || !liveServices) {
+    if (!activeStore?.id) {
       toast.error("Live POS checkout requires an available store inventory connection.");
       return;
     }
@@ -419,7 +355,18 @@ const POSPage: React.FC = () => {
           {filtered.length === 0 && (
             <div className="text-center py-16 text-gray-300">
               <Search size={36} className="mx-auto mb-3 opacity-40" />
-              <p className="text-xs font-medium">No services found</p>
+              <p className="text-xs font-medium">
+                {catalogueLoading ? "Loading store catalogue..." : catalogueError ? catalogueError : "No live products are available for this store"}
+              </p>
+              {catalogueError && (
+                <button
+                  type="button"
+                  onClick={() => setCatalogueReloadKey((current) => current + 1)}
+                  className="mt-3 text-xs font-semibold text-printa-red hover:underline"
+                >
+                  Try again
+                </button>
+              )}
             </div>
           )}
         </div>

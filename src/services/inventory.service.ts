@@ -38,8 +38,16 @@ export const inventoryService = {
     return api.post<StoreStaffDto>(`/api/v1/inventory/stores/${storeId}/staff`, payload);
   },
 
+  addStaffByEmail(storeId: string, payload: { email: string; role: "STAFF" | "MANAGER" | "CASHIER" }) {
+    return api.post<StoreStaffDto>(`/api/v1/inventory/stores/${storeId}/staff/by-email`, payload);
+  },
+
   removeStaff(storeId: string, userId: string) {
     return api.delete(`/api/v1/inventory/stores/${storeId}/staff/${userId}`);
+  },
+
+  updateStaffRole(storeId: string, userId: string, role: "STAFF" | "MANAGER" | "CASHIER") {
+    return api.patch<{ status: string }>(`/api/v1/inventory/stores/${storeId}/staff/${userId}/role`, { role });
   },
 
   listProducts(storeId: string) {
@@ -59,6 +67,10 @@ export const inventoryService = {
     return api.patch<unknown>(`/api/v1/inventory/products/${productId}/stock`, {
       quantity,
     });
+  },
+
+  updateVendorPrice(productId: string, price: number) {
+    return api.patch<{ status: string }>(`/api/v1/inventory/products/${productId}/price`, { price });
   },
 
   setAvailability(productId: string, available: boolean) {

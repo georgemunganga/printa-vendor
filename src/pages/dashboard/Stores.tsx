@@ -21,11 +21,6 @@ import {
 import { useStore } from "@/context/store-context";
 import { useAuth } from "@/context/auth-context";
 import type { Store as StoreType } from "@/types";
-import {
-  createStore as createMockStore,
-  deleteStore as deleteMockStore,
-  updateStore as updateMockStore,
-} from "@/mock-api/stores";
 import { inventoryService } from "@/services/inventory.service";
 
 interface StoreFormState {
@@ -93,10 +88,6 @@ const StoresPage: React.FC = () => {
   const handleOpenStore = async (store: StoreType) => {
     setSwitchingStoreId(store.id);
     toast.loading(`Switching to ${store.name}...`);
-
-    // Simulate switching delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
     setActiveStore(store);
     setSwitchingStoreId(null);
     toast.dismiss();
@@ -127,32 +118,18 @@ const StoresPage: React.FC = () => {
           city: "Lusaka",
           country: "Zambia",
         };
-        try {
-          await inventoryService.updateStore(editingStore.id, payload);
-        } catch {
-          await updateMockStore(editingStore.id, payload);
-        }
+        await inventoryService.updateStore(editingStore.id, payload);
         toast.success("Store updated.");
       } else {
-        try {
-          await inventoryService.createStore({
-            vendor_id: user.businessId,
-            name: form.name,
-            address: form.address,
-            city: "Lusaka",
-            country: "Zambia",
-            phone: form.phone,
-            email: form.email,
-          });
-        } catch {
-          await createMockStore({
-            businessId: user.businessId,
-            name: form.name,
-            address: form.address,
-            phone: form.phone,
-            email: form.email,
-          });
-        }
+        await inventoryService.createStore({
+          vendor_id: user.businessId,
+          name: form.name,
+          address: form.address,
+          city: "Lusaka",
+          country: "Zambia",
+          phone: form.phone,
+          email: form.email,
+        });
         toast.success("Store created.");
       }
       await refreshStores();
@@ -173,11 +150,7 @@ const StoresPage: React.FC = () => {
     if (!storeToDelete) return;
 
     try {
-      try {
-        await inventoryService.deleteStore(storeToDelete.id);
-      } catch {
-        await deleteMockStore(storeToDelete.id);
-      }
+      await inventoryService.deleteStore(storeToDelete.id);
       if (activeStore?.id === storeToDelete.id) {
         setActiveStore(null);
       }
@@ -197,7 +170,7 @@ const StoresPage: React.FC = () => {
       <div className="mb-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="dashboard-page-title">Hello <span className="text-printa-red">George</span></h1>
+            <h1 className="dashboard-page-title">Hello <span className="text-printa-red">{user?.name || "there"}</span></h1>
             <p className="text-xs text-gray-400 mt-0.5">
               {stores.length} {stores.length === 1 ? "store" : "stores"} available
             </p>

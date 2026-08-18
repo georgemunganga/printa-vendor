@@ -17,34 +17,11 @@ import { BackButton } from "@/components/dashboard/BackButton";
 import { Button } from "@/components/ui/button";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { toast } from "sonner";
-import { DEFAULT_LOCATIONS } from "@/data/locations";
 import { useStore } from "@/context/store-context";
 import { ordersService } from "@/services/orders.service";
 import type { OrderDto } from "@/services/contracts";
 
 const MapPicker = lazy(() => import("@/components/MapPicker"));
-
-interface DeliveryDriver {
-  name: string;
-  photo?: string;
-  vehicle: string;
-  rating: number;
-  phone: string;
-}
-
-const mockDriver: DeliveryDriver = {
-  name: "Farid Bayramov",
-  vehicle: "Mercedes",
-  rating: 5.0,
-  phone: "+254 712 345 678",
-};
-
-const mockTrackingStats = {
-  trackingId: "#43434",
-  totalTime: "2hr 15m",
-  totalDistance: "25km",
-  estimatedArrival: "15 min",
-};
 
 const TrackingPage = () => {
   const navigate = useNavigate();
@@ -82,6 +59,15 @@ const TrackingPage = () => {
   const activeOrders = storeOrders.filter(
     (storeOrder) => storeOrder.status === "IN_PRODUCTION" || storeOrder.status === "READY"
   );
+  const trackedOrder = order ?? activeOrders[0] ?? null;
+  const tracking = {
+    trackingId: trackedOrder?.order_number ?? "—",
+    orderCreatedAt: trackedOrder ? new Date(trackedOrder.created_at).toLocaleDateString() : "No active order",
+    status: trackedOrder?.status === "READY" ? "Ready for collection" : trackedOrder ? "In production" : "No active delivery",
+    totalTime: trackedOrder ? new Date(trackedOrder.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Not available",
+    totalDistance: "Not available",
+    estimatedArrival: "Not available",
+  };
 
   const handleLogout = () => {
     toast.success("Logged out successfully");
@@ -110,13 +96,13 @@ const TrackingPage = () => {
       <div className={`absolute inset-0 transition-all duration-300 ${isSidebarOpen ? "md:left-[220px]" : "md:left-[72px]"}`}>
         <Suspense fallback={mapFallback}>
           <MapPicker
-            locations={DEFAULT_LOCATIONS}
+            locations={[]}
             selectedLocationId={null}
             onLocationSelect={() => {}}
             className="h-full w-full"
             height="100%"
             zoom={14}
-            showRoute={true}
+            showRoute={false}
           />
         </Suspense>
       </div>
@@ -163,11 +149,7 @@ const TrackingPage = () => {
                   <span className="text-sm font-semibold text-gray-900">Active Orders</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Search"
-                    className="text-xs bg-gray-100 rounded-xl px-3 py-1.5 w-24 focus:outline-none focus:ring-1 focus:ring-printa-red"
-                  />
+                  <span className="text-xs text-gray-400">{tracking.status}</span>
                 </div>
               </div>
 
@@ -179,35 +161,28 @@ const TrackingPage = () => {
                       <User size={24} className="text-gray-500" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">{mockDriver.name}</p>
-                      <p className="text-xs text-gray-500">1 June, 2025</p>
+                      <p className="text-sm font-semibold text-gray-900">No delivery agent assigned</p>
+                      <p className="text-xs text-gray-500">{tracking.orderCreatedAt}</p>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    className="bg-printa-red hover:bg-printa-red/90 rounded-xl text-xs gap-1.5"
-                    onClick={() => window.open(`tel:${mockDriver.phone}`)}
-                  >
-                    <Phone size={14} />
-                    Call
-                  </Button>
+                  <span className="rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-400">Agent unavailable</span>
                 </div>
 
                 {/* Stats Row */}
                 <div className="grid grid-cols-3 gap-3 mt-4">
                   <div className="text-center">
                     <p className="text-[10px] text-gray-400 uppercase">Tracking ID</p>
-                    <p className="text-sm font-semibold text-gray-900">{mockTrackingStats.trackingId}</p>
+                    <p className="text-sm font-semibold text-gray-900">{tracking.trackingId}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-[10px] text-gray-400 uppercase">Vehicle</p>
-                    <p className="text-sm font-semibold text-gray-900">{mockDriver.vehicle}</p>
+                    <p className="text-sm font-semibold text-gray-900">Not assigned</p>
                   </div>
                   <div className="text-center">
                     <p className="text-[10px] text-gray-400 uppercase">Review</p>
                     <p className="text-sm font-semibold text-gray-900 flex items-center justify-center gap-1">
-                      {mockDriver.rating.toFixed(1)}
-                      <Star size={12} className="text-yellow-400 fill-yellow-400" />
+                      —
+                      <Star size={12} className="text-gray-300" />
                     </p>
                   </div>
                 </div>
@@ -216,15 +191,15 @@ const TrackingPage = () => {
                 <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100">
                   <div className="text-center">
                     <p className="text-[10px] text-gray-400 uppercase">Total Time</p>
-                    <p className="text-sm font-bold text-gray-900">{mockTrackingStats.totalTime}</p>
+                    <p className="text-sm font-bold text-gray-900">{tracking.totalTime}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-[10px] text-gray-400 uppercase">Total Distance</p>
-                    <p className="text-sm font-bold text-gray-900">{mockTrackingStats.totalDistance}</p>
+                    <p className="text-sm font-bold text-gray-900">{tracking.totalDistance}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-[10px] text-gray-400 uppercase">ETA</p>
-                    <p className="text-sm font-bold text-printa-red">{mockTrackingStats.estimatedArrival}</p>
+                    <p className="text-sm font-bold text-printa-red">{tracking.estimatedArrival}</p>
                   </div>
                 </div>
               </div>
@@ -266,18 +241,18 @@ const TrackingPage = () => {
                             <div className="flex items-start justify-between">
                               <div>
                                 <p className="text-xs text-gray-500">
-                                  {stopIndex === 0 ? "02.03.2025" : "12.03.2025"}
+                                  {stopIndex === 0 ? new Date(orderItem.created_at).toLocaleDateString() : "Route data unavailable"}
                                 </p>
                                 <p className="text-xs text-gray-400">
-                                  {stopIndex === 0 ? "06:00" : "12:00"}
+                                  {stopIndex === 0 ? new Date(orderItem.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
                                 </p>
                               </div>
                               <div className="text-right">
                                 <p className="text-sm font-medium text-gray-900">
-                                  Location {stopIndex + 1}
+                                  {stopIndex === 0 ? activeStore?.name ?? "Store" : "Delivery destination unavailable"}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  Street {stopIndex === 0 ? "12" : "23"}
+                                  {stopIndex === 0 ? activeStore?.address ?? "Store address unavailable" : "No live route data"}
                                 </p>
                               </div>
                             </div>
@@ -307,17 +282,9 @@ const TrackingPage = () => {
           </div>
           <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2">
             <div className="bg-white rounded-xl shadow-md px-2 py-1 text-[10px] font-medium whitespace-nowrap flex items-center gap-1">
-              <span>Farid Bayr...</span>
-              <Button
-                size="sm"
-                className="h-5 px-1.5 bg-printa-red hover:bg-printa-red/90 text-[10px]"
-                onClick={() => window.open(`tel:${mockDriver.phone}`)}
-              >
-                <Phone size={10} />
-                Call
-              </Button>
+                <span>{trackedOrder ? `Order ${trackedOrder.order_number}` : "No active order"}</span>
             </div>
-            <p className="text-[9px] text-gray-400 text-center mt-0.5">1 June, 2025</p>
+            <p className="text-[9px] text-gray-400 text-center mt-0.5">{tracking.status}</p>
           </div>
           {/* Pulse animation */}
           <div className="absolute inset-0 rounded-full bg-printa-red/20 animate-ping" />
@@ -361,7 +328,7 @@ const TrackingPage = () => {
             {/* Distance & ETA - Main Info */}
             <div className="px-6 pb-4 text-center">
               <p className="text-2xl font-bold text-gray-900">
-                {mockTrackingStats.totalDistance} <span className="text-gray-400 font-normal">•</span> {mockTrackingStats.estimatedArrival}
+                {tracking.totalDistance} <span className="text-gray-400 font-normal">•</span> {tracking.estimatedArrival}
               </p>
               <p className="text-sm text-gray-500 mt-1">
                 {activeStore?.address || "Store location unavailable"}
@@ -371,18 +338,15 @@ const TrackingPage = () => {
             {/* Action Buttons Row */}
             <div className="px-4 pb-4 border-b border-gray-100">
               <div className="grid grid-cols-3 gap-3">
-                <button
-                  onClick={() => window.open(`tel:${mockDriver.phone}`)}
-                  className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
-                >
-                  <MessageCircle size={20} className="text-gray-600" />
-                  <span className="text-xs font-medium text-gray-900">Guest</span>
-                  <span className="text-[10px] text-gray-500">Chat</span>
+                <button type="button" disabled className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-gray-50 text-gray-400 cursor-not-allowed">
+                  <MessageCircle size={20} />
+                  <span className="text-xs font-medium">Agent</span>
+                  <span className="text-[10px]">Unavailable</span>
                 </button>
                 <button className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
                   <Clock size={20} className="text-gray-600" />
                   <span className="text-xs font-medium text-gray-900">Delivery time</span>
-                  <span className="text-[10px] text-gray-500">11:30</span>
+                  <span className="text-[10px] text-gray-500">Not available</span>
                 </button>
                 <button
                   onClick={() => navigate("/dashboard/support")}

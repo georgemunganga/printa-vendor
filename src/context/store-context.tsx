@@ -1,7 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Store } from "@/types";
 import { useAuth } from "./auth-context";
-import { getStoresForUser } from "@/mock-api/stores";
 import { inventoryService } from "@/services/inventory.service";
 import type { StoreDto } from "@/services/contracts";
 
@@ -37,11 +36,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     setIsHydrating(true);
     try {
-      let resolvedStores: Store[] = [];
-      try {
-        const storeDtos = await inventoryService.listStores();
-        if (Array.isArray(storeDtos) && storeDtos.length > 0) {
-          resolvedStores = storeDtos.map((dto: StoreDto) => ({
+      const storeDtos = await inventoryService.listStores();
+      const resolvedStores = Array.isArray(storeDtos)
+        ? storeDtos.map((dto: StoreDto) => ({
             id: dto.id,
             name: dto.name,
             address: dto.address || "Zambia",
@@ -50,36 +47,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             status: dto.is_active ? "active" : "inactive",
             businessId: dto.vendor_id,
             createdAt: dto.created_at,
-          }));
-        }
-      } catch {
-        // Fallback to mock/local stores if API is unavailable or un-onboarded
-      }
-
-      if (resolvedStores.length === 0) {
-        resolvedStores = await getStoresForUser(user);
-      }
+          }))
+        : [];
 
       setAvailableStores(resolvedStores);
       const savedId = localStorage.getItem("printa_active_store_id");
       const savedStore = savedId ? resolvedStores.find((s) => s.id === savedId) ?? null : null;
-
-      setActiveStoreState((prev) => {
-        if (prev && resolvedStores.some((s) => s.id === prev.id)) {
-          return prev;
+      setActiveStoreState((previousStore) => {
+        if (previousStore && resolvedStores.some((store) => store.id === previousStore.id)) {
+          return previousStore;
         }
         if (savedStore) return savedStore;
         if (resolvedStores.length === 1) return resolvedStores[0];
         return null;
       });
+      if (resolvedStores.length === 0) localStorage.removeItem("printa_active_store_id");
+    } catch {
+      // Never substitute mock records for an unavailable API. Clear the operational scope instead.
+      setAvailableStores([]);
+      setActiveStoreState(null);
+      localStorage.removeItem("printa_active_store_id");
     } finally {
       setIsHydrating(false);
     }
-  }, [user, isAuthenticated, setActiveStoreScope]);
+  }, [user, isAuthenticated]);
 
   useEffect(() => {
     void refreshStores();
   }, [refreshStores]);
+
+  useEffect(() => {
+    setActiveStoreScope(activeStore?.id ?? null);
+  }, [activeStore?.id, setActiveStoreScope]);
 
   const clearStoreUnlock = (storeId: string | null | undefined) => {
     if (!storeId || !user || typeof window === "undefined") return;

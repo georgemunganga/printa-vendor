@@ -2,7 +2,6 @@ import React, { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useStore } from "@/context/store-context";
 import { toast } from "sonner";
-import { getStoreBySlug } from "@/mock-api/stores";
 
 /**
  * Store Entrypoint - Handles direct store access via URL
@@ -26,22 +25,16 @@ export const StoreEntrypoint: React.FC = () => {
     // Normalize store name (convert to lowercase, replace spaces with hyphens)
     const normalizedName = storeName.toLowerCase().trim();
 
-    // Look up store by slug from mock API layer
-    const storeData = getStoreBySlug(normalizedName);
+    const toSlug = (name: string) => name.toLowerCase().trim().replace(/\s+/g, "-");
+    const storeData = availableStores.find((store) => toSlug(store.name) === normalizedName);
 
     if (!storeData) {
-      toast.error(`Store "${storeName}" not found`);
+      toast.error(`Store "${storeName}" was not found or you do not have access to it`);
       navigate("/dashboard/stores");
       return;
     }
 
-    if (availableStores.length > 0 && !availableStores.some((s) => s.id === storeData.id)) {
-      toast.error("You do not have access to this store");
-      navigate("/dashboard/stores");
-      return;
-    }
-
-    // Set the store in context
+    // Set the authorized live store in context.
     setActiveStore(storeData);
 
     // Redirect to dashboard; global store-lock overlay will request PIN entry.

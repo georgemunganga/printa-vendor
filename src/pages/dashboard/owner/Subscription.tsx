@@ -92,23 +92,15 @@ interface Invoice {
   status: "paid" | "free";
 }
 
-const INVOICES: Invoice[] = [
-  { id: "INV-2026-02", date: "Feb 15, 2026", amount: "K150", status: "paid" },
-  { id: "INV-2026-01", date: "Jan 15, 2026", amount: "K150", status: "paid" },
-  { id: "INV-2025-12", date: "Dec 15, 2025", amount: "K150", status: "paid" },
-  { id: "INV-2025-11", date: "Nov 15, 2025", amount: "K150", status: "paid" },
-  { id: "INV-2025-10", date: "Oct 15, 2025", amount: "K0", status: "free" },
-  { id: "INV-2025-09", date: "Sep 15, 2025", amount: "K0", status: "free" },
-];
-
 const MOBILE_NETWORKS = ["MTN", "Airtel", "Zamtel"];
 
 /* ─── Page ─── */
 
 const SubscriptionPage: React.FC = () => {
   const { user } = useAuth();
-  const [currentTier, setCurrentTier] = useState("core");
+  const [currentTier, setCurrentTier] = useState<string | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [billingError, setBillingError] = useState<string | null>(null);
   const [changeTo, setChangeTo] = useState<string | null>(null);
   const [showInvoices, setShowInvoices] = useState(false);
 
@@ -124,7 +116,8 @@ const SubscriptionPage: React.FC = () => {
         ]);
         if (!cancelled) {
           const tierId = subscription.tier_name?.toLowerCase();
-          if (tierId && TIERS.some((tier) => tier.id === tierId)) setCurrentTier(tierId);
+          setCurrentTier(tierId && TIERS.some((tier) => tier.id === tierId) ? tierId : null);
+          setBillingError(null);
           setInvoices(liveInvoices.map((invoice) => ({
             id: invoice.invoice_number,
             date: new Date(invoice.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
@@ -132,8 +125,12 @@ const SubscriptionPage: React.FC = () => {
             status: invoice.status === "PAID" ? "paid" : "free",
           })));
         }
-      } catch {
-        if (!cancelled) setInvoices(INVOICES);
+      } catch (error) {
+        if (!cancelled) {
+          setCurrentTier(null);
+          setInvoices([]);
+          setBillingError(error instanceof Error ? error.message : "Unable to load subscription details.");
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -146,10 +143,11 @@ const SubscriptionPage: React.FC = () => {
   const [mobileNumber, setMobileNumber] = useState("");
   const [pin, setPin] = useState("");
 
-  const current = TIERS.find((t) => t.id === currentTier) ?? TIERS[0];
+  // The fallback only keeps the dormant legacy modal type-safe; visible plan status remains governed by currentTier.
+  const current = currentTier ? TIERS.find((tier) => tier.id === currentTier) ?? TIERS[0] : TIERS[0];
   const target = changeTo ? TIERS.find((t) => t.id === changeTo) : null;
-  const isUpgrade = target
-    ? TIERS.findIndex((t) => t.id === changeTo) > TIERS.findIndex((t) => t.id === currentTier)
+  const isUpgrade = target && currentTier
+    ? TIERS.findIndex((tier) => tier.id === changeTo) > TIERS.findIndex((tier) => tier.id === currentTier)
     : false;
 
   const resetWizard = () => {
@@ -218,11 +216,11 @@ const SubscriptionPage: React.FC = () => {
               <p className="text-[11px] font-medium uppercase tracking-widest text-white/50 mb-1">
                 Your plan
               </p>
-              <h2 className="text-xl font-bold">{current.name}</h2>
+              <h2 className="text-xl font-bold">{currentTier ? current.name : "No active plan"}</h2>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold">{current.price}</p>
-              {current.period && (
+              <p className="text-2xl font-bold">{currentTier ? current.price : "—"}</p>
+              {currentTier && current.period && (
                 <p className="text-[11px] text-white/40">{current.period}</p>
               )}
             </div>
@@ -230,11 +228,11 @@ const SubscriptionPage: React.FC = () => {
 
           <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
             <span className="rounded-full bg-white/10 px-3 py-1">
-              Renews Mar 15
+              {currentTier ? "Subscription active" : "No subscription record"}
             </span>
             <span className="rounded-full bg-emerald-500/20 text-emerald-300 px-3 py-1 flex items-center gap-1">
               <Check size={10} />
-              Active
+              {currentTier ? "Active" : "Not configured"}
             </span>
           </div>
         </motion.div>
@@ -250,7 +248,7 @@ const SubscriptionPage: React.FC = () => {
               const isCurrent = tier.id === currentTier;
               const Icon = tier.icon;
               const tierIdx = TIERS.findIndex((t) => t.id === tier.id);
-              const currentIdx = TIERS.findIndex((t) => t.id === currentTier);
+              const currentIdx = currentTier ? TIERS.findIndex((tier) => tier.id === currentTier) : -1;
 
               return (
                 <motion.div
@@ -348,8 +346,11 @@ const SubscriptionPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          setChangeTo(tier.id);
-                          setWizardStep(1);
+                          if (!currentTier) {
+                            toast.error("No active subscription is configured for this vendor yet.");
+                            return;
+                          }
+                          toast.info("Tier changes will be connected to the configured vendor-tier catalogue in the next billing release.");
                         }}
                         className={`w-full py-2.5 rounded-xl text-xs font-semibold transition active:scale-[0.97] ${
                           tierIdx > currentIdx
@@ -357,7 +358,7 @@ const SubscriptionPage: React.FC = () => {
                             : "border border-gray-200 text-gray-600 hover:bg-gray-50"
                         }`}
                       >
-                        {tierIdx > currentIdx ? "Upgrade" : "Downgrade"}
+                        {!currentTier ? "Unavailable" : tierIdx > currentIdx ? "Upgrade" : "Downgrade"}
                       </button>
                     )}
                   </div>
@@ -405,7 +406,9 @@ const SubscriptionPage: React.FC = () => {
                 className="overflow-hidden"
               >
                 <div className="mt-2 rounded-2xl bg-white border border-gray-100 overflow-hidden">
-                  {invoices.map((inv, i) => (
+                  {invoices.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-xs text-gray-400">{billingError ? billingError : "No invoices have been generated yet."}</div>
+                  ) : invoices.map((inv, i) => (
                     <div
                       key={inv.id}
                       className={`flex items-center gap-3 px-4 py-3 ${
