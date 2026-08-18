@@ -26,6 +26,8 @@ import { inventoryService } from "@/services/inventory.service";
 interface StoreFormState {
   name: string;
   address: string;
+  city: string;
+  country: string;
   phone: string;
   email: string;
 }
@@ -33,6 +35,8 @@ interface StoreFormState {
 const emptyForm: StoreFormState = {
   name: "",
   address: "",
+  city: "",
+  country: "",
   phone: "",
   email: "",
 };
@@ -70,6 +74,8 @@ const StoresPage: React.FC = () => {
     setForm({
       name: store.name,
       address: store.address,
+      city: store.city || "",
+      country: store.country || "",
       phone: store.phone || "",
       email: store.email || "",
     });
@@ -102,8 +108,8 @@ const StoresPage: React.FC = () => {
 
   const handleSave = async () => {
     if (!user) return;
-    if (!form.name.trim() || !form.address.trim()) {
-      toast.error("Store name and address are required.");
+    if (!form.name.trim() || !form.address.trim() || !form.city.trim() || !form.country.trim()) {
+      toast.error("Store name, address, city, and country are required.");
       return;
     }
 
@@ -115,8 +121,8 @@ const StoresPage: React.FC = () => {
           address: form.address,
           phone: form.phone,
           email: form.email,
-          city: "Lusaka",
-          country: "Zambia",
+          city: form.city.trim(),
+          country: form.country.trim(),
         };
         await inventoryService.updateStore(editingStore.id, payload);
         toast.success("Store updated.");
@@ -125,8 +131,8 @@ const StoresPage: React.FC = () => {
           vendor_id: user.businessId,
           name: form.name,
           address: form.address,
-          city: "Lusaka",
-          country: "Zambia",
+          city: form.city.trim(),
+          country: form.country.trim(),
           phone: form.phone,
           email: form.email,
         });
@@ -360,6 +366,26 @@ const StoresPage: React.FC = () => {
               onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
               placeholder="123 Main Street, Lusaka"
             />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="store-city">City</Label>
+              <Input
+                id="store-city"
+                value={form.city}
+                onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
+                placeholder="Lusaka"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="store-country">Country</Label>
+              <Input
+                id="store-country"
+                value={form.country}
+                onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))}
+                placeholder="Zambia"
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="store-phone">Phone (optional)</Label>
