@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { BackButton } from "@/components/dashboard/BackButton";
+import { submissionsService } from "@/services/submissions.service";
 
 type FeedbackType = "feedback" | "feature" | "complaint" | "bug";
 
@@ -74,8 +75,21 @@ const FeedbackPage = () => {
       return;
     }
 
-    // Feedback persistence is not configured yet. Do not claim that it was submitted.
-    toast.error("Feedback submissions are not configured yet. Please use the published support contact channels.");
+    setIsSubmitting(true);
+    try {
+      await submissionsService.createFeedback({
+        category: selectedType,
+        subject: formData.subject,
+        message: formData.message,
+      });
+      toast.success("Feedback submitted. Thank you for helping improve Printa.");
+      setSelectedType(null);
+      setFormData({ subject: "", message: "", email: "" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to submit feedback.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const selectedCategory = feedbackCategories.find((c) => c.id === selectedType);

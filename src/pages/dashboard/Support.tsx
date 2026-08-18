@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { submissionsService } from "@/services/submissions.service";
 
 const SUPPORT_TOPICS = [
   "Account & Login Issues",
@@ -46,8 +47,20 @@ const SupportPage = () => {
       return;
     }
 
-    // Support tickets are not yet backed by a durable service. Do not claim a message was sent.
-    toast.error("Support requests are not configured yet. Please use the published support contact channels.");
+    setIsSubmitting(true);
+    try {
+      await submissionsService.createSupport({
+        topic: formData.topic,
+        subject: `Support: ${formData.topic}`,
+        message: formData.message,
+      });
+      toast.success("Support request submitted. Our team can review it in the support queue.");
+      setFormData({ name: "", email: "", topic: "", message: "" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to submit your support request.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
