@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { useAuth } from "@/context/auth-context";
-import { mockOrders } from "@/data/mockOrders";
+import { useStore } from "@/context/store-context";
+import { ordersService } from "@/services/orders.service";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { User, Mail, Phone, Calendar, MapPin, CheckCircle, ShoppingBag } from "lucide-react";
@@ -18,10 +20,12 @@ const initialFormValues = {
 
 const EditProfilePage = () => {
   const { user, updateUser } = useAuth();
+  const { activeStore } = useStore();
   const navigate = useNavigate();
   const [formData, setFormData] = useState(initialFormValues);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [orderCount, setOrderCount] = useState(0);
 
   useEffect(() => {
     setFormData({
@@ -32,6 +36,29 @@ const EditProfilePage = () => {
       address: "",
     });
   }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      if (!activeStore?.id) {
+        if (!cancelled) setOrderCount(0);
+        return;
+      }
+
+      try {
+        const orders = await ordersService.listByStore(activeStore.id);
+        if (!cancelled) setOrderCount(orders.length);
+      } catch {
+        // Do not display a fabricated count if operational data is unavailable.
+        if (!cancelled) setOrderCount(0);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStore?.id]);
 
   const handleSave = () => {
     if (!isEditing) {
@@ -192,7 +219,7 @@ const EditProfilePage = () => {
                 <ShoppingBag size={14} className="text-gray-400" />
                 <span className="text-sm text-gray-600">Total orders</span>
               </div>
-              <span className="text-sm font-medium text-gray-900">{mockOrders.length}</span>
+              <span className="text-sm font-medium text-gray-900">{orderCount}</span>
             </div>
           </div>
         </motion.div>
