@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Inbox, Layers, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { PrintJob, PrintJobStatus } from "@/types";
-import { mockLiveOrders } from "@/data/mockLiveOrders";
 import type { OrderDto, OrderStatusDto } from "@/services/contracts";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { LiveFeedTopBar } from "@/components/dashboard/live-feed/LiveFeedTopBar";
@@ -14,7 +13,6 @@ import {
 import { IncomingJobCard } from "@/components/dashboard/live-feed/IncomingJobCard";
 import { ActiveJobCard } from "@/components/dashboard/live-feed/ActiveJobCard";
 import { useStore } from "@/context/store-context";
-import { scopeItemsByActiveStore } from "@/lib/store-scope";
 import { ordersService } from "@/services/orders.service";
 
 const addHistory = (job: PrintJob, status: PrintJobStatus) => {
@@ -60,129 +58,11 @@ const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
   };
 };
 
-const toFallbackJobs = (storeId?: string): PrintJob[] =>
-  scopeItemsByActiveStore(mockLiveOrders, storeId).map((order) => ({
-    ...order,
-    createdAt: new Date(order.createdAt),
-    estimatedDelivery: order.estimatedDelivery ? new Date(order.estimatedDelivery) : undefined,
-    acceptDeadline: order.acceptDeadline ? new Date(order.acceptDeadline) : undefined,
-    lastUpdated: new Date(),
-    statusHistory: [{ status: order.status, timestamp: new Date(order.createdAt) }],
-  }));
-
-// ── Notification sound ──
-const notificationAudio = new Audio("/audio/liveorder.mp3");
-const playNotificationSound = () => {
-  try {
-    notificationAudio.currentTime = 0;
-    notificationAudio.play();
-  } catch {
-    // Audio not available
-  }
-};
-
-// ── Simulated incoming orders pool ──
-const simulatedOrders: Omit<PrintJob, "createdAt" | "acceptDeadline" | "lastUpdated" | "statusHistory">[] = [
-  {
-    id: "LV-3001",
-    fileName: "graduation-photos.pdf",
-    status: "pending",
-    totalPrice: 55.0,
-    pageCount: 20,
-    copies: 5,
-    colorMode: "color",
-    printer: { name: "HP LaserJet Pro" },
-    paperSize: "A4",
-    doubleSided: false,
-    customerName: "Mwamba Kaunda",
-    deliveryType: "rider",
-    distance: 2.1,
-  },
-  {
-    id: "LV-3002",
-    fileName: "cv-resume.docx",
-    status: "pending",
-    totalPrice: 12.0,
-    pageCount: 3,
-    copies: 10,
-    colorMode: "bw",
-    printer: { name: "HP LaserJet Pro" },
-    paperSize: "A4",
-    doubleSided: true,
-    customerName: "Mulenga Chilufya",
-    deliveryType: "pickup",
-  },
-  {
-    id: "LV-3003",
-    fileName: "church-bulletin.pdf",
-    status: "pending",
-    totalPrice: 28.0,
-    pageCount: 4,
-    copies: 100,
-    colorMode: "color",
-    printer: { name: "HP LaserJet Pro" },
-    paperSize: "A5",
-    doubleSided: true,
-    customerName: "Pastor Mumba",
-    deliveryType: "pickup",
-    urgent: true,
-  },
-  {
-    id: "LV-3004",
-    fileName: "product-catalogue.pdf",
-    status: "pending",
-    totalPrice: 150.0,
-    pageCount: 24,
-    copies: 50,
-    colorMode: "color",
-    printer: { name: "HP LaserJet Pro" },
-    paperSize: "A4",
-    doubleSided: true,
-    customerName: "Thandiwe Ngoma",
-    deliveryType: "rider",
-    distance: 5.4,
-  },
-  {
-    id: "LV-3005",
-    fileName: "exam-paper.pdf",
-    status: "pending",
-    totalPrice: 18.5,
-    pageCount: 8,
-    copies: 30,
-    colorMode: "bw",
-    printer: { name: "HP LaserJet Pro" },
-    paperSize: "A4",
-    doubleSided: false,
-    customerName: "Mr. Kapambwe",
-    deliveryType: "pickup",
-  },
-  {
-    id: "LV-3006",
-    fileName: "birthday-banner.pdf",
-    status: "pending",
-    totalPrice: 75.0,
-    pageCount: 1,
-    copies: 2,
-    colorMode: "color",
-    printer: { name: "HP LaserJet Pro" },
-    paperSize: "A1",
-    doubleSided: false,
-    customerName: "Chimwemwe Banda",
-    deliveryType: "rider",
-    distance: 3.7,
-    urgent: true,
-  },
-];
 
 const DashboardV2: React.FC = () => {
   const { activeStore } = useStore();
-  const scopedSimulatedOrders = useMemo(
-    () => scopeItemsByActiveStore(simulatedOrders, activeStore?.id),
-    [activeStore?.id]
-  );
 
   const [jobs, setJobs] = useState<PrintJob[]>([]);
-  const [isUsingFallback, setIsUsingFallback] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
@@ -194,7 +74,6 @@ const DashboardV2: React.FC = () => {
       if (!activeStore?.id) {
         if (!cancelled) {
           setJobs([]);
-          setIsUsingFallback(false);
         }
         return;
       }
@@ -203,13 +82,11 @@ const DashboardV2: React.FC = () => {
         const orders = await ordersService.listByStore(activeStore.id);
         if (!cancelled) {
           setJobs(orders.map(mapOrderToPrintJob));
-          setIsUsingFallback(false);
         }
       } catch {
         if (!cancelled) {
           // Operational queues must not fabricate orders when the live API is unavailable.
           setJobs([]);
-          setIsUsingFallback(false);
         }
       }
     })();
@@ -219,57 +96,6 @@ const DashboardV2: React.FC = () => {
     };
   }, [activeStore?.id]);
 
-  // ── Simulate incoming orders ──
-  const simIndexRef = useRef(0);
-  const soundEnabledRef = useRef(soundEnabled);
-  soundEnabledRef.current = soundEnabled;
-
-  useEffect(() => {
-    if (!isOnline || !isUsingFallback) return;
-
-    // Random interval between 8–20 seconds
-    const scheduleNext = () => {
-      if (scopedSimulatedOrders.length === 0) {
-        return setTimeout(() => {
-          timerId = scheduleNext();
-        }, 12_000);
-      }
-      const delay = 8_000 + Math.random() * 12_000;
-      return setTimeout(() => {
-        if (simIndexRef.current >= scopedSimulatedOrders.length) {
-          simIndexRef.current = 0; // loop back
-        }
-
-        const template = scopedSimulatedOrders[simIndexRef.current];
-        simIndexRef.current += 1;
-
-        const now = new Date();
-        const newJob: PrintJob = {
-          ...template,
-          id: `${template.id}-${Date.now()}`, // unique id
-          createdAt: now,
-          acceptDeadline: new Date(now.getTime() + 15 * 60_000),
-          lastUpdated: now,
-          statusHistory: [{ status: "pending", timestamp: now }],
-        };
-
-        setJobs((prev) => [newJob, ...prev]);
-
-        if (soundEnabledRef.current) {
-          playNotificationSound();
-        }
-
-        toast("New order received!", {
-          description: `${newJob.customerName} — ${newJob.fileName}`,
-        });
-
-        timerId = scheduleNext();
-      }, delay);
-    };
-
-    let timerId = scheduleNext();
-    return () => clearTimeout(timerId);
-  }, [isOnline, isUsingFallback, scopedSimulatedOrders]);
 
   // ── Job actions ──
   const updateJob = useCallback(
@@ -287,8 +113,9 @@ const DashboardV2: React.FC = () => {
     async (id: string) => {
       try {
         await ordersService.updateStatus(id, "CONFIRMED");
-      } catch {
-        // Fallback local state if backend order is simulated/mock
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to accept this job.");
+        return;
       }
       updateJob(id, (job) => {
         if (job.status !== "pending") return job;
@@ -308,8 +135,9 @@ const DashboardV2: React.FC = () => {
     async (id: string) => {
       try {
         await ordersService.cancel(id);
-      } catch {
-        // Fallback local state if simulated
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to reject this job.");
+        return;
       }
       updateJob(id, (job) => ({
         ...job,
@@ -325,8 +153,9 @@ const DashboardV2: React.FC = () => {
     async (id: string) => {
       try {
         await ordersService.updateStatus(id, "IN_PRODUCTION");
-      } catch {
-        // Fallback
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to start this job.");
+        return;
       }
       updateJob(id, (job) => ({
         ...job,
@@ -345,8 +174,9 @@ const DashboardV2: React.FC = () => {
           ? "DELIVERED"
           : "READY";
         await ordersService.updateStatus(id, nextStatus);
-      } catch {
-        // Fallback
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to update this job.");
+        return;
       }
       updateJob(id, (job) => {
         if (job.status === "ready") {
