@@ -1,6 +1,5 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle,
   Clock,
   FileText,
   Package,
@@ -10,10 +9,26 @@ import {
   Users,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { mockOrders } from "@/data/mockOrders";
 import { motion } from "framer-motion";
+import { useStore } from "@/context/store-context";
+import { ordersService } from "@/services/orders.service";
+import type { OrderDto, OrderStatusDto } from "@/services/contracts";
 
-const statusMeta: Record<string, { label: string; accent: string }> = {
+type DashboardOrder = {
+  id: string;
+  fileName: string;
+  status: "pending" | "printing" | "ready" | "delivered";
+  totalPrice: number;
+  pageCount: number;
+  copies: number;
+  colorMode: "color" | "bw";
+  printer: { name: string };
+  dueDate?: string;
+  estimatedDelivery?: Date;
+  createdAt: Date;
+};
+
+const statusMeta: Record<DashboardOrder["status"], { label: string; accent: string }> = {
   pending: { label: "Processing", accent: "text-amber-600 bg-amber-100" },
   printing: { label: "Printing", accent: "text-sky-600 bg-sky-100" },
   ready: { label: "Ready to Dispatch", accent: "text-emerald-600 bg-emerald-100" },
@@ -46,46 +61,113 @@ const payoutHistory = [
   { label: "Jan 26 · Bank", amount: "$790", status: "Scheduled" },
 ];
 
+const toDashboardStatus = (status: OrderStatusDto): DashboardOrder["status"] => {
+  switch (status) {
+    case "PENDING":
+    case "CONFIRMED":
+      return "pending";
+    case "IN_PRODUCTION":
+      return "printing";
+    case "READY":
+      return "ready";
+    case "DELIVERED":
+      return "delivered";
+    case "CANCELLED":
+      return "delivered";
+  }
+};
+
+const mapOrder = (order: OrderDto): DashboardOrder => {
+  const copies = order.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+  const createdAt = new Date(order.created_at);
+  const updatedAt = new Date(order.updated_at);
+  return {
+    id: order.id,
+    fileName: order.order_number,
+    status: toDashboardStatus(order.status),
+    totalPrice: order.total,
+    pageCount: copies,
+    copies,
+    colorMode: "color",
+    printer: { name: order.channel === "POS" ? "Walk-in Queue" : "Production queue" },
+    dueDate: order.status === "READY" ? "Ready now" : undefined,
+    estimatedDelivery: order.status === "READY" || order.status === "IN_PRODUCTION" ? updatedAt : undefined,
+    createdAt,
+  };
+};
+
 const Dashboard = () => {
-  const totalOrders = mockOrders.length;
-  const pendingCount = mockOrders.filter((order) => order.status === "pending").length;
-  const inFlight = mockOrders.filter((order) => order.status === "printing").length;
-  const readyToDispatch = mockOrders.filter((order) => order.status === "ready").length;
-  const totalEarnings = mockOrders.reduce((sum, order) => sum + order.totalPrice, 0);
+  const { activeStore } = useStore();
+  const [orders, setOrders] = useState<DashboardOrder[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!activeStore?.id) {
+        if (!cancelled) {
+          setOrders([]);
+          setIsLoading(false);
+        }
+        return;
+      }
+      if (!cancelled) setIsLoading(true);
+      try {
+        const liveOrders = await ordersService.listByStore(activeStore.id);
+        if (!cancelled) setOrders(liveOrders.map(mapOrder));
+      } catch {
+        if (!cancelled) setOrders([]);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStore?.id]);
+
+  const totalOrders = orders.length;
+  const pendingCount = orders.filter((order) => order.status === "pending").length;
+  const inFlight = orders.filter((order) => order.status === "printing").length;
+  const readyToDispatch = orders.filter((order) => order.status === "ready").length;
+  const totalEarnings = orders.reduce((sum, order) => sum + order.totalPrice, 0);
   const healthScore = 94;
   const slaConfidence = 92;
-  const dueSoon = mockOrders.filter((order) => {
+  const dueSoon = orders.filter((order) => {
     const due = order.estimatedDelivery ?? order.createdAt;
-    return due instanceof Date ? due.getTime() - Date.now() < 1000 * 60 * 60 * 6 : false;
+    return due.getTime() - Date.now() < 1000 * 60 * 60 * 6;
   }).length;
-  const throughput = mockOrders.reduce((sum, order) => sum + order.copies, 0);
+  const throughput = orders.reduce((sum, order) => sum + order.copies, 0);
 
-  const statCards = [
-    {
-      label: "Jobs in Queue",
-      value: `${pendingCount + inFlight}`,
-      detail: `${pendingCount} awaiting acceptance`,
-      icon: <Clock size={20} className="text-printa-red" />,
-    },
-    {
-      label: "Ready to Dispatch",
-      value: readyToDispatch,
-      detail: `${dueSoon} due in 6h`,
-      icon: <Truck size={20} className="text-printa-red" />,
-    },
-    {
-      label: "Throughput",
-      value: `${throughput} copies`,
-      detail: `${mockOrders.length} jobs executed`,
-      icon: <Package size={20} className="text-printa-red" />,
-    },
-    {
-      label: "Earnings (7d)",
-      value: `$${totalEarnings.toFixed(2)}`,
-      detail: `${slaConfidence}% SLA compliance`,
-      icon: <Shield size={20} className="text-printa-red" />,
-    },
-  ];
+  const statCards = useMemo(
+    () => [
+      {
+        label: "Jobs in Queue",
+        value: `${pendingCount + inFlight}`,
+        detail: `${pendingCount} awaiting acceptance`,
+        icon: <Clock size={20} className="text-printa-red" />,
+      },
+      {
+        label: "Ready to Dispatch",
+        value: readyToDispatch,
+        detail: `${dueSoon} due in 6h`,
+        icon: <Truck size={20} className="text-printa-red" />,
+      },
+      {
+        label: "Throughput",
+        value: `${throughput} copies`,
+        detail: `${totalOrders} jobs executed`,
+        icon: <Package size={20} className="text-printa-red" />,
+      },
+      {
+        label: "Earnings (7d)",
+        value: `$${totalEarnings.toFixed(2)}`,
+        detail: `${slaConfidence}% SLA compliance`,
+        icon: <Shield size={20} className="text-printa-red" />,
+      },
+    ],
+    [dueSoon, inFlight, pendingCount, readyToDispatch, slaConfidence, throughput, totalEarnings, totalOrders]
+  );
 
   return (
     <DashboardLayout pageTitle="Vendor Operations">
@@ -95,7 +177,6 @@ const Dashboard = () => {
         transition={{ duration: 0.4 }}
         className="space-y-6"
       >
-        {/* Overview Stats */}
         <section className="grid gap-4 lg:grid-cols-4">
           {statCards.map((card) => (
             <div
@@ -114,7 +195,6 @@ const Dashboard = () => {
           ))}
         </section>
 
-        {/* Job feed + side panels */}
         <section className="grid gap-6 lg:grid-cols-[2fr,1fr]">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -124,55 +204,69 @@ const Dashboard = () => {
                 </p>
                 <h2 className="text-xl font-semibold text-gray-900">Kitchen Queue</h2>
               </div>
-              <div className="text-sm font-medium text-gray-500">{mockOrders.length} jobs</div>
+              <div className="text-sm font-medium text-gray-500">
+                {isLoading ? "Loading..." : `${totalOrders} jobs`}
+              </div>
             </div>
             <div className="space-y-3">
-              {mockOrders.map((order) => {
-                const status = statusMeta[order.status] ?? statusMeta.pending;
-                return (
-                  <motion.div
-                    key={order.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.05 }}
-                    className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${status.accent}`}>
-                        {status.label}
-                      </span>
-                      <span className="text-sm font-semibold text-gray-900">
-                        ${order.totalPrice.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-500">
-                      <FileText size={16} className="text-gray-300" />
-                      <span className="font-medium text-gray-900">{order.fileName}</span>
-                      <span>·</span>
-                      <span>{order.pageCount} pages · {order.copies} copies</span>
-                      <span>·</span>
-                      <span>{order.colorMode === "color" ? "Color" : "B&W"}</span>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
-                      <div>Due: {order.dueDate ?? "TBD"}</div>
-                      <div>Assigned: {order.printer.name}</div>
-                      <div>ETA: {order.estimatedDelivery ? order.estimatedDelivery.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "Pending"}</div>
-                      <div>SLA target: 4h</div>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-printa-red transition hover:bg-printa-red/5">
-                        Accept
-                      </button>
-                      <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500">
-                        Start Production
-                      </button>
-                      <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500">
-                        Mark Ready
-                      </button>
-                    </div>
-                  </motion.div>
-                );
-              })}
+              {!isLoading && orders.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm">
+                  {activeStore?.name
+                    ? `No live jobs are available for ${activeStore.name} yet.`
+                    : "Select a store to see live operational jobs."}
+                </div>
+              ) : (
+                orders.map((order) => {
+                  const status = statusMeta[order.status] ?? statusMeta.pending;
+                  return (
+                    <motion.div
+                      key={order.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.05 }}
+                      className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${status.accent}`}>
+                          {status.label}
+                        </span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          ${order.totalPrice.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                        <FileText size={16} className="text-gray-300" />
+                        <span className="font-medium text-gray-900">{order.fileName}</span>
+                        <span>·</span>
+                        <span>{order.pageCount} pages · {order.copies} copies</span>
+                        <span>·</span>
+                        <span>{order.colorMode === "color" ? "Color" : "B&W"}</span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
+                        <div>Due: {order.dueDate ?? "TBD"}</div>
+                        <div>Assigned: {order.printer.name}</div>
+                        <div>
+                          ETA: {order.estimatedDelivery
+                            ? order.estimatedDelivery.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                            : "Pending"}
+                        </div>
+                        <div>SLA target: 4h</div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-printa-red transition hover:bg-printa-red/5">
+                          Accept
+                        </button>
+                        <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500">
+                          Start Production
+                        </button>
+                        <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500">
+                          Mark Ready
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })
+              )}
             </div>
           </div>
           <aside className="space-y-4">
@@ -237,7 +331,6 @@ const Dashboard = () => {
           </aside>
         </section>
 
-        {/* Capability + Payout + Health */}
         <section className="grid gap-4 lg:grid-cols-3">
           <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between">
