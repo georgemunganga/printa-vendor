@@ -1,18 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, ChevronRight, Clock, Delete, LockKeyhole } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { ArrowLeft, ChevronRight, Clock, Delete, LockKeyhole } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { useAuth } from "@/context/auth-context";
 import { useStore } from "@/context/store-context";
-import { listMockDirectoryUsers } from "@/mock-api/auth";
 import { Button } from "@/components/ui/button";
+import { useStoreStaffQuery } from "@/query/hooks";
 
 type Employee = {
   id: string;
   name: string;
   role: string;
-  pin: string;
   avatar: string;
   status: "active" | "off";
 };
@@ -44,47 +41,11 @@ const PinPad: React.FC<{
   employee: Employee;
   onBack?: () => void;
   showBackButton?: boolean;
-  onClockIn?: (employee: Employee) => void;
-}> = ({ employee, onBack, showBackButton, onClockIn }) => {
-  const [pinInput, setPinInput] = useState("");
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [isWrong, setIsWrong] = useState(false);
-
-  const handleDigit = (digit: string) => {
-    if (isUnlocked || pinInput.length >= 4) return;
-    setIsWrong(false);
-    const next = `${pinInput}${digit}`;
-    setPinInput(next);
-    if (next.length === 4) {
-      if (next === employee.pin) {
-        setIsUnlocked(true);
-      } else {
-        setIsWrong(true);
-        setTimeout(() => {
-          setPinInput("");
-          setIsWrong(false);
-        }, 600);
-      }
-    }
-  };
-
-  const handleBackspace = () => {
-    if (isUnlocked) return;
-    setPinInput((prev) => prev.slice(0, -1));
-    setIsWrong(false);
-  };
-
-  const handleReset = () => {
-    setPinInput("");
-    setIsUnlocked(false);
-    setIsWrong(false);
-  };
-
-  const dots = Array.from({ length: 4 }, (_, idx) => idx < pinInput.length);
+}> = ({ employee, onBack, showBackButton }) => {
+  const dots = Array.from({ length: 4 });
 
   return (
     <div className="flex flex-col items-center justify-center h-full px-6 py-8">
-      {/* Mobile back button */}
       {showBackButton && (
         <button
           type="button"
@@ -96,128 +57,89 @@ const PinPad: React.FC<{
         </button>
       )}
 
-      {/* Avatar */}
       <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600 mb-3">
         {employee.avatar}
       </div>
-
       <p className="text-base font-semibold text-gray-900">{employee.name}</p>
       <p className="text-xs text-gray-400 mt-0.5">{employee.role}</p>
 
-      {/* Status / prompt */}
       <div className="mt-5 mb-5 text-center">
-        {isUnlocked ? (
-          <div className="flex items-center gap-1.5 text-emerald-600">
-            <Check size={16} />
-            <span className="text-sm font-medium">Shift unlocked</span>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-400">Enter your PIN</p>
-        )}
+        <p className="text-sm text-gray-400">Clock-in service is not configured</p>
       </div>
 
-      {/* PIN dots */}
-      <div className="flex gap-3 mb-8">
-        {dots.map((filled, idx) => (
-          <div
-            key={idx}
-            className={`h-3 w-3 rounded-full transition-all duration-150 ${
-              isWrong
-                ? "bg-red-400 animate-shake"
-                : filled
-                ? "bg-gray-900 scale-110"
-                : "bg-gray-200"
-            }`}
-          />
+      <div className="flex gap-3 mb-8" aria-hidden="true">
+        {dots.map((_, idx) => (
+          <div key={idx} className="h-3 w-3 rounded-full bg-gray-200" />
         ))}
       </div>
 
-      {/* Keypad */}
-      <div className="grid grid-cols-3 gap-3 w-full max-w-[240px]">
+      <div className="grid grid-cols-3 gap-3 w-full max-w-[240px]" aria-label="PIN entry unavailable">
         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
           <button
             key={digit}
             type="button"
-            onClick={() => handleDigit(String(digit))}
-            disabled={isUnlocked}
-            className="h-14 rounded-2xl bg-gray-50 text-lg font-semibold text-gray-800 hover:bg-gray-100 active:scale-95 transition disabled:opacity-40"
+            disabled
+            className="h-14 rounded-2xl bg-gray-50 text-lg font-semibold text-gray-300 cursor-not-allowed"
           >
             {digit}
           </button>
         ))}
         <div />
-        <button
-          type="button"
-          onClick={() => handleDigit("0")}
-          disabled={isUnlocked}
-          className="h-14 rounded-2xl bg-gray-50 text-lg font-semibold text-gray-800 hover:bg-gray-100 active:scale-95 transition disabled:opacity-40"
-        >
+        <button type="button" disabled className="h-14 rounded-2xl bg-gray-50 text-lg font-semibold text-gray-300 cursor-not-allowed">
           0
         </button>
         <button
           type="button"
-          onClick={handleBackspace}
-          disabled={isUnlocked}
-          className="h-14 rounded-2xl bg-gray-50 text-gray-500 hover:bg-gray-100 active:scale-95 transition flex items-center justify-center disabled:opacity-40"
+          disabled
+          className="h-14 rounded-2xl bg-gray-50 text-gray-300 cursor-not-allowed flex items-center justify-center"
           aria-label="Delete digit"
         >
           <Delete size={18} />
         </button>
       </div>
 
-      {/* Action button */}
       <Button
         type="button"
-        onClick={isUnlocked ? () => onClockIn?.(employee) ?? handleReset() : undefined}
-        disabled={!isUnlocked}
-        className={`mt-6 w-full max-w-[240px] h-12 rounded-2xl text-sm font-semibold transition ${
-          isUnlocked
-            ? "bg-printa-red text-white hover:bg-red-700"
-            : "bg-gray-100 text-gray-400 cursor-not-allowed"
-        }`}
+        disabled
+        className="mt-6 w-full max-w-[240px] h-12 rounded-2xl bg-gray-100 text-gray-400 cursor-not-allowed"
       >
-        {isUnlocked ? "Clock In" : "Enter PIN to continue"}
+        Clock-in unavailable
       </Button>
+      <p className="mt-3 max-w-[260px] text-center text-xs leading-5 text-gray-400">
+        PIN verification and attendance recording will be enabled when the staff clock API is available.
+      </p>
     </div>
   );
 };
 
 /* ─── Main Page ─── */
 const ShiftManagement: React.FC = () => {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { activeStore } = useStore();
+  const { data: storeStaff = [], isLoading: isLoadingStaff } = useStoreStaffQuery(activeStore?.id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMobilePin, setShowMobilePin] = useState(false);
-  const scopedEmployees = useMemo(() => {
-    if (!user) return [];
 
-    const directory = listMockDirectoryUsers(user.businessId);
-    const activeStoreId = activeStore?.id;
-    const filtered = directory.filter((member) => {
-      if (member.id === user.id) return true;
-      if (!activeStoreId) return false;
-      if (member.role === "owner") return true;
-      return (member.assignedStoreIds ?? []).includes(activeStoreId);
-    });
-
-    const uniqueMembers = Array.from(new Map(filtered.map((member) => [member.id, member])).values());
-
-    return uniqueMembers
-      .map<Employee>((member) => ({
-        id: member.id,
-        name: member.name,
-        role: roleLabel[member.role] ?? "Staff",
-        pin: member.pin,
-        avatar: toInitials(member.name),
-        status: member.id === user.id ? "active" : "off",
-      }))
-      .sort((a, b) => {
-        if (a.id === user.id) return -1;
-        if (b.id === user.id) return 1;
-        return a.name.localeCompare(b.name);
-      });
-  }, [activeStore?.id, user]);
+  const scopedEmployees = useMemo(
+    () =>
+      storeStaff
+        .map<Employee>((member) => {
+          const name = `${member.first_name ?? ""} ${member.last_name ?? ""}`.trim() || member.email || "Staff member";
+          return {
+            id: member.user_id,
+            name,
+            role: roleLabel[member.role.toLowerCase()] ?? "Staff",
+            avatar: toInitials(name),
+            status: member.user_id === user?.id && member.is_active ? "active" : "off",
+          };
+        })
+        .sort((a, b) => {
+          if (a.id === user?.id) return -1;
+          if (b.id === user?.id) return 1;
+          return a.name.localeCompare(b.name);
+        }),
+    [storeStaff, user?.id],
+  );
 
   const selectedEmployee = useMemo(
     () => scopedEmployees.find((e) => e.id === selectedId) ?? null,
@@ -237,11 +159,6 @@ const ShiftManagement: React.FC = () => {
     setShowMobilePin(true);
   };
 
-  const handleClockIn = (emp: Employee) => {
-    toast.success(`${emp.name} clocked in successfully`);
-    setTimeout(() => navigate("/dashboard"), 600);
-  };
-
   return (
     <DashboardLayout pageTitle="Shift Management">
       {/* ── Mobile full-screen PIN view ── */}
@@ -251,7 +168,6 @@ const ShiftManagement: React.FC = () => {
             employee={selectedEmployee}
             showBackButton
             onBack={() => setShowMobilePin(false)}
-            onClockIn={handleClockIn}
           />
         </div>
       )}
@@ -263,7 +179,7 @@ const ShiftManagement: React.FC = () => {
           <div className="mb-5">
             <h1 className="dashboard-page-title">Shift Management</h1>
             <p className="text-xs text-gray-400 mt-0.5">
-              {activeStore?.name ?? "Store"} · Select an employee to clock in
+              {activeStore?.name ?? "Store"} · Review assigned staff
             </p>
           </div>
 
@@ -275,34 +191,42 @@ const ShiftManagement: React.FC = () => {
 
           {/* Employee cards */}
           <div className="space-y-2">
-            {scopedEmployees.map((emp, index) => {
-              const isSelected = emp.id === selectedId;
-              const colorClass = avatarColors[index % avatarColors.length];
-              return (
-                <button
-                  key={emp.id}
-                  type="button"
-                  onClick={() => handleSelectEmployee(emp.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-5 rounded-2xl text-left transition-all ${
-                    isSelected
-                      ? "bg-printa-red ring-1 ring-gray-200 shadow-sm"
-                      : "hover:bg-white/70 border border-gray-200"
-                  }`}
-                >
-                  <div className={`w-11 h-11 rounded-full ${colorClass} flex items-center justify-center text-sm font-bold flex-shrink-0`}>
-                    {emp.avatar}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{emp.name}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{emp.role}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={`w-2 h-2 rounded-full ${emp.status === "active" ? "bg-emerald-400" : "bg-gray-300"}`} />
-                    <ChevronRight size={16} className="text-gray-300" />
-                  </div>
-                </button>
-              );
-            })}
+            {isLoadingStaff ? (
+              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-5 text-sm text-gray-400">Loading staff directory…</div>
+            ) : scopedEmployees.length === 0 ? (
+              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-5 text-sm text-gray-400">
+                No staff members are assigned to this store yet.
+              </div>
+            ) : (
+              scopedEmployees.map((emp, index) => {
+                const isSelected = emp.id === selectedId;
+                const colorClass = avatarColors[index % avatarColors.length];
+                return (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => handleSelectEmployee(emp.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-5 rounded-2xl text-left transition-all ${
+                      isSelected
+                        ? "bg-printa-red ring-1 ring-gray-200 shadow-sm"
+                        : "hover:bg-white/70 border border-gray-200"
+                    }`}
+                  >
+                    <div className={`w-11 h-11 rounded-full ${colorClass} flex items-center justify-center text-sm font-bold flex-shrink-0`}>
+                      {emp.avatar}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{emp.name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{emp.role}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`w-2 h-2 rounded-full ${emp.status === "active" ? "bg-emerald-400" : "bg-gray-300"}`} />
+                      <ChevronRight size={16} className="text-gray-300" />
+                    </div>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -310,14 +234,14 @@ const ShiftManagement: React.FC = () => {
         <div className="hidden lg:block w-[360px] flex-shrink-0">
           <div className="sticky top-2 h-[calc(100vh-2rem)] bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             {selectedEmployee ? (
-              <PinPad employee={selectedEmployee} onClockIn={handleClockIn} />
+              <PinPad employee={selectedEmployee} />
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
                 <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-3">
                   <LockKeyhole size={22} className="text-gray-300" />
                 </div>
                 <p className="text-sm font-medium text-gray-400">Select an employee</p>
-                <p className="text-xs text-gray-300 mt-1">Choose from the list to enter their PIN</p>
+                <p className="text-xs text-gray-300 mt-1">Choose from the list to view clock service status</p>
               </div>
             )}
           </div>

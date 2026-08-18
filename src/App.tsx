@@ -32,6 +32,7 @@ import JobDetailsV2 from "./pages/dashboard/job/[id]-v2";
 import Feedback from "./pages/dashboard/Feedback";
 import Tracking from "./pages/dashboard/store/Tracking";
 import Chat from "./pages/dashboard/store/Chat";
+import ShiftManagement from "./pages/dashboard/store/ShiftManagement";
 import DashboardV2 from "./pages/dashboard/store/DashboardV2";
 import POSPage from "./pages/dashboard/store/pos/POSPage";
 import Stores from "./pages/dashboard/Stores";
@@ -149,7 +150,7 @@ const App = () => {
                   <Route path="/dashboard/chat" element={<ProtectedRoute routeScope="store"><Chat /></ProtectedRoute>} />
                   <Route path="/dashboard/chat/:orderId" element={<ProtectedRoute routeScope="store"><Chat /></ProtectedRoute>} />
                   <Route path="/dashboard/pos" element={<ProtectedRoute routeScope="store" requiredPermission="use_pos"><POSPage /></ProtectedRoute>} />
-                  <Route path="/dashboard/shift-management" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/dashboard/shift-management" element={<ProtectedRoute routeScope="store"><ShiftManagement /></ProtectedRoute>} />
                   <Route
                     path="/dashboard/stores"
                     element={

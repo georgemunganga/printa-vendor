@@ -148,6 +148,10 @@ export interface StoreStaffDto {
   store_id: UUID;
   user_id: UUID;
   role: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  is_active: boolean;
   created_at: ISODateString;
   updated_at: ISODateString;
 }
