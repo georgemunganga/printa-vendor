@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Edit3, LogIn, MapPin, Plus, Store, Trash2, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import { useAuth } from "@/context/auth-context";
 import type { Store as StoreType } from "@/types";
 import { inventoryService } from "@/services/inventory.service";
 import { vendorService } from "@/services/vendor.service";
+import { vendorPolicyService, type VendorPolicyConsentStatusDto } from "@/services/vendor-policy.service";
 
 interface StoreFormState {
   businessName: string;
@@ -65,12 +66,62 @@ const StoresPage: React.FC = () => {
   const [hoveredStoreId, setHoveredStoreId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [storeToDelete, setStoreToDelete] = useState<StoreType | null>(null);
+  const [policyStatus, setPolicyStatus] = useState<VendorPolicyConsentStatusDto | null>(null);
+  const [isPolicyLoading, setIsPolicyLoading] = useState(false);
+  const [policyLoadError, setPolicyLoadError] = useState<string | null>(null);
+  const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [isAcceptingPolicies, setIsAcceptingPolicies] = useState(false);
 
   const stores = useMemo(() => availableStores, [availableStores]);
+
+  const loadPolicyStatus = useCallback(async () => {
+    setIsPolicyLoading(true);
+    try {
+      const status = await vendorPolicyService.getStatus();
+      setPolicyStatus(status);
+      setPolicyLoadError(null);
+    } catch (error) {
+      setPolicyStatus(null);
+      setPolicyLoadError(error instanceof Error ? error.message : "Unable to verify the current vendor policies.");
+    } finally {
+      setIsPolicyLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void loadPolicyStatus();
+  }, [loadPolicyStatus, user?.id]);
+
+  const acceptCurrentPolicies = async () => {
+    if (!policyStatus?.acceptance_required) return true;
+    if (!policyAccepted) {
+      toast.error("Please confirm that you have read and accept the current required policies.");
+      return false;
+    }
+    setIsAcceptingPolicies(true);
+    try {
+      const nextStatus = await vendorPolicyService.accept(
+        policyStatus.required_policies.map((policy) => ({ slug: policy.slug, version: policy.version })),
+      );
+      setPolicyStatus(nextStatus);
+      setPolicyAccepted(false);
+      setPolicyLoadError(null);
+      toast.success("Your policy acceptance has been recorded.");
+      return !nextStatus.acceptance_required;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to record policy acceptance.");
+      return false;
+    } finally {
+      setIsAcceptingPolicies(false);
+    }
+  };
 
   const openAddModal = () => {
     setEditingStore(null);
     setForm(emptyForm);
+    setPolicyAccepted(false);
+    if (!user?.businessId) void loadPolicyStatus();
     setIsModalOpen(true);
   };
 
@@ -94,6 +145,7 @@ const StoresPage: React.FC = () => {
       setIsModalOpen(false);
       setEditingStore(null);
       setForm(emptyForm);
+      setPolicyAccepted(false);
       setIsSaving(false);
     }
   };
@@ -120,6 +172,18 @@ const StoresPage: React.FC = () => {
       toast.error("Business name is required to create your vendor profile.");
       return;
     }
+    if (requiresProfileSetup && isPolicyLoading) {
+      toast.error("Please wait while Printa checks the current vendor policies.");
+      return;
+    }
+    if (requiresProfileSetup && policyLoadError) {
+      toast.error("The current vendor policies could not be verified. Please retry before creating a profile.");
+      return;
+    }
+    if (requiresProfileSetup && policyStatus?.acceptance_required && !policyAccepted) {
+      toast.error("You must accept the current Vendor Terms and Privacy Notice before creating a vendor profile.");
+      return;
+    }
     if (!form.name.trim() || !form.address.trim() || !form.city.trim() || !form.country.trim()) {
       toast.error("Store name, address, city, and country are required.");
       return;
@@ -128,6 +192,13 @@ const StoresPage: React.FC = () => {
     let profileCreated = false;
     setIsSaving(true);
     try {
+      if (requiresProfileSetup && policyStatus?.acceptance_required) {
+        const accepted = await acceptCurrentPolicies();
+        if (!accepted) {
+          setIsSaving(false);
+          return;
+        }
+      }
       if (requiresProfileSetup) {
         const vendor = await vendorService.onboard({
           business_name: form.businessName.trim(),
@@ -212,6 +283,28 @@ const StoresPage: React.FC = () => {
             <span className="hidden md:inline">{user?.businessId ? "Add Store" : "Set Up Business"}</span>
           </button>
         </div>
+        {user?.businessId && policyStatus?.acceptance_required && (
+          <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-gray-700">
+            <p className="font-semibold text-gray-900">Action required: updated vendor policies</p>
+            <p className="mt-1 text-xs leading-5 text-gray-600">Accept the current published policies before using vendor operations. Printa records the version and time of your acceptance.</p>
+            <div className="mt-3 space-y-2">
+              {policyStatus.required_policies.map((policy) => policy.document_url ? (
+                <a key={policy.id} href={policy.document_url} className="block text-xs font-semibold text-printa-red hover:underline">
+                  Read {policy.title} ({policy.version})
+                </a>
+              ) : (
+                <p key={policy.id} className="text-xs font-semibold text-gray-700">{policy.title} ({policy.version})</p>
+              ))}
+              <label className="flex items-start gap-2 pt-1 text-xs text-gray-700">
+                <input type="checkbox" checked={policyAccepted} onChange={(event) => setPolicyAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-printa-red focus:ring-printa-red" />
+                <span>I have read and agree to the current required vendor policies.</span>
+              </label>
+              <Button type="button" size="sm" onClick={() => void acceptCurrentPolicies()} disabled={!policyAccepted || isAcceptingPolicies}>
+                {isAcceptingPolicies ? "Recording acceptance..." : "Accept current policies"}
+              </Button>
+            </div>
+          </div>
+        )}
         {activeStore && (
           <button
             type="button"
@@ -400,6 +493,32 @@ const StoresPage: React.FC = () => {
                 onChange={(e) => setForm((prev) => ({ ...prev, taxId: e.target.value }))}
                 placeholder="Enter your tax ID if available"
               />
+            </div>
+          )}
+          {!editingStore && !user?.businessId && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+              <p className="font-semibold text-gray-900">Vendor Terms and Privacy Notice</p>
+              {isPolicyLoading ? (
+                <p className="mt-1 text-xs text-gray-500">Checking the current policies…</p>
+              ) : policyLoadError ? (
+                <p className="mt-1 text-xs text-printa-red">The current policies could not be loaded. Close this form and try again before creating your profile.</p>
+              ) : policyStatus?.acceptance_required ? (
+                <div className="mt-2 space-y-2">
+                  {policyStatus.required_policies.map((policy) => policy.document_url ? (
+                    <a key={policy.id} href={policy.document_url} className="block text-xs font-semibold text-printa-red hover:underline">
+                      Read {policy.title} ({policy.version})
+                    </a>
+                  ) : (
+                    <p key={policy.id} className="text-xs font-semibold text-gray-700">{policy.title} ({policy.version})</p>
+                  ))}
+                  <label className="flex items-start gap-2 pt-1 text-xs leading-5 text-gray-700">
+                    <input type="checkbox" checked={policyAccepted} onChange={(event) => setPolicyAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-printa-red focus:ring-printa-red" />
+                    <span>I confirm that I have read and agree to the current Vendor Terms and Vendor Privacy Notice. I understand that Printa records this affirmative acceptance.</span>
+                  </label>
+                </div>
+              ) : (
+                <p className="mt-1 text-xs leading-5 text-gray-500">No published vendor policy requires acceptance at this time. Working legal drafts are not presented as final terms.</p>
+              )}
             </div>
           )}
           <div className="space-y-2">
