@@ -7,6 +7,16 @@ import { User, Mail } from 'lucide-react';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { authService } from "@/services/auth.service";
 import { getApiErrorMessage } from "@/lib/api";
+import { ApiError } from "@/lib/api/errors";
+import { isOnboardingComplete } from "@/lib/vendorOnboardingState";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const GoogleIcon = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -23,6 +33,7 @@ const SignUp = () => {
   const [email, setEmail] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [existingAccountEmail, setExistingAccountEmail] = useState<string | null>(null);
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +71,10 @@ const SignUp = () => {
         },
       });
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setExistingAccountEmail(email.trim().toLowerCase());
+        return;
+      }
       const message = getApiErrorMessage(error, "Unable to send verification code");
       toast.error(message);
     } finally {
@@ -148,6 +163,32 @@ const SignUp = () => {
             Already have an account?{' '}
             <Link to="/login" className="text-printa-red hover:underline font-semibold">Log in</Link>
           </p>
+
+          <Dialog open={existingAccountEmail !== null} onOpenChange={(open) => !open && setExistingAccountEmail(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Account already exists</DialogTitle>
+                <DialogDescription>
+                  An account already exists for <span className="font-medium text-gray-900">{existingAccountEmail}</span>. Sign in with a verification code instead of creating a second account. Your onboarding progress will remain available.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button type="button" variant="outline" onClick={() => setExistingAccountEmail(null)}>Use a different email</Button>
+                <Button
+                  type="button"
+                  className="bg-printa-red text-white hover:bg-red-700"
+                  onClick={() => navigate("/login", {
+                    state: {
+                      email: existingAccountEmail,
+                      resumeOnboarding: isOnboardingComplete(),
+                    },
+                  })}
+                >
+                  Log in with this email
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
       </>
     </AuthLayout>
   );

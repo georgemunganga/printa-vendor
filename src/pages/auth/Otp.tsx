@@ -20,6 +20,7 @@ type OTPRouteState = {
   contact?: string;
   method?: OtpMethodDto;
   requestPayload?: OtpRequestDto;
+  resumeOnboarding?: boolean;
 };
 
 const OTPVerificationPage = () => {
@@ -38,6 +39,7 @@ const OTPVerificationPage = () => {
   const mode = initialState.mode;
   const isLoginFlow = mode === "login";
   const isSignupFlow = mode === "signup";
+  const shouldCompletePendingOnboarding = isOnboardingComplete() && (isSignupFlow || initialState.resumeOnboarding === true);
 
   const deliveryLabel = useMemo(() => {
     const deliveries = challenge?.deliveries?.filter((delivery) => delivery.status === "SENT") ?? [];
@@ -132,7 +134,7 @@ const OTPVerificationPage = () => {
         code,
       });
       await completeOtpLogin(session.token, session.token_type);
-      if (isSignupFlow && isOnboardingComplete()) {
+      if (shouldCompletePendingOnboarding) {
         try {
           const vendor = await completePendingVendorOnboarding();
           updateUser({ businessId: vendor.id, businessName: vendor.business_name });
