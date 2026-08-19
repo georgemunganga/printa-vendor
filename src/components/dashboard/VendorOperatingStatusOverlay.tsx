@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock3, CreditCard, ShieldCheck } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
 import {
@@ -40,6 +40,7 @@ const formatDate = (value?: string) => {
 
 export const VendorOperatingStatusOverlay: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [status, setStatus] = useState<VendorOperatingStatusDto | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -88,7 +89,13 @@ export const VendorOperatingStatusOverlay: React.FC = () => {
   if (!user?.businessId || (status?.operational && !error)) return null;
 
   const reasons = status?.blocking_reasons ?? [];
+  const hasSubscriptionBlock = reasons.some((reason) => reason.startsWith("SUBSCRIPTION_"));
+  const isSubscriptionRecoveryRoute = location.pathname.replace(/\/$/, "") === "/dashboard/subscription";
   const showBlockingOverlay = Boolean(status && !status.operational);
+
+  // Subscription setup is a recovery path, not an operational action. The backend continues to
+  // enforce every operational restriction; this only keeps the recovery screen reachable.
+  if (isSubscriptionRecoveryRoute && hasSubscriptionBlock) return null;
   if (!showBlockingOverlay && !error) return null;
 
   return (
@@ -144,6 +151,9 @@ export const VendorOperatingStatusOverlay: React.FC = () => {
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={() => navigate("/dashboard/support")}>Contact support</Button>
+          {hasSubscriptionBlock && (
+            <Button type="button" variant="outline" onClick={() => navigate("/dashboard/subscription")}>Manage subscription</Button>
+          )}
           {status?.grace_eligible && (
             <Button type="button" className="bg-printa-red text-white hover:bg-printa-red/90" onClick={() => void requestGrace()} disabled={isRequestingGrace}>
               {isRequestingGrace ? "Requesting grace…" : "Request 5-day grace period"}
