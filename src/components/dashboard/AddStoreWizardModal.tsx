@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { inventoryService } from "@/services/inventory.service";
 import { operatingHoursService } from "@/services/operating-hours.service";
 import type { StoreDto } from "@/services/contracts";
+import { clearOfflineDraft, loadOfflineDraft, offlineKeys, saveOfflineDraft } from "@/lib/offline-store";
 
 const MAP_LIBRARIES: ("places")[] = ["places"];
 const LUSAKA_CENTER = { lat: -15.3875, lng: 28.3228 };
@@ -47,6 +48,13 @@ const defaultDraft = (): StoreDraft => ({
   latitude: null,
   longitude: null,
 });
+
+type AddStoreSavedDraft = {
+  step: number;
+  draft: StoreDraft;
+  hours: Hours;
+  addressQuery: string;
+};
 
 const defaultHours = (): Hours => ({
   Mon: { enabled: true, open: "08:00", close: "17:00" },
@@ -93,6 +101,7 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
   const [addressQuery, setAddressQuery] = useState("");
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDraftReady, setIsDraftReady] = useState(false);
   const autocompleteRef = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesRef = useRef<google.maps.places.PlacesService | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -112,8 +121,39 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
   }, []);
 
   useEffect(() => {
-    if (open) reset();
-  }, [open, reset]);
+    if (!open) {
+      setIsDraftReady(false);
+      return;
+    }
+    setIsDraftReady(false);
+    let cancelled = false;
+    void loadOfflineDraft<AddStoreSavedDraft>(offlineKeys.addStoreDraft(vendorId))
+      .then((saved) => {
+        if (cancelled) return;
+        if (!saved?.value) {
+          reset();
+          setIsDraftReady(true);
+          return;
+        }
+        setStep(saved.value.step);
+        setDraft(saved.value.draft);
+        setHours(saved.value.hours);
+        setAddressQuery(saved.value.addressQuery);
+        setPredictions([]);
+        setIsSaving(false);
+        setIsDraftReady(true);
+      })
+      .catch(() => {
+        reset();
+        setIsDraftReady(true);
+      });
+    return () => { cancelled = true; };
+  }, [open, reset, vendorId]);
+
+  useEffect(() => {
+    if (!open || !isDraftReady || isSaving) return;
+    void saveOfflineDraft<AddStoreSavedDraft>(offlineKeys.addStoreDraft(vendorId), { step, draft, hours, addressQuery }).catch(() => undefined);
+  }, [open, isDraftReady, isSaving, step, draft, hours, addressQuery, vendorId]);
 
   useEffect(() => {
     if (isLoaded && !autocompleteRef.current) {
@@ -202,6 +242,11 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
       return;
     }
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are offline. This store setup has been saved on this device and can be submitted when you reconnect.");
+      return;
+    }
+
     setIsSaving(true);
     try {
       const store = await inventoryService.createStore({
@@ -229,6 +274,7 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
       }
 
       await onCreated(store);
+      await clearOfflineDraft(offlineKeys.addStoreDraft(vendorId)).catch(() => undefined);
       toast.success(`${store.name} has been added.`);
       onOpenChange(false);
     } catch (error) {

@@ -3,6 +3,7 @@ import type { Store } from "@/types";
 import { useAuth } from "./auth-context";
 import { inventoryService } from "@/services/inventory.service";
 import type { StoreDto } from "@/services/contracts";
+import { loadOfflineSnapshot, offlineKeys, saveOfflineSnapshot } from "@/lib/offline-store";
 
 const SHIFT_UNLOCK_STORAGE_PREFIX = "printa_shift_unlock_v1";
 
@@ -14,6 +15,9 @@ interface StoreContextValue {
   refreshStores: () => Promise<void>;
   isStoreSelected: boolean;
   needsStoreSelection: boolean;
+  dataSource: "live" | "offline" | "none";
+  lastSyncedAt: number | null;
+  isOffline: boolean;
 }
 
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
@@ -25,12 +29,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Start in hydrating mode to avoid premature route-guard redirects
   // before persisted store context is restored.
   const [isHydrating, setIsHydrating] = useState(true);
+  const [dataSource, setDataSource] = useState<"live" | "offline" | "none">("none");
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [isOffline, setIsOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine);
 
   const refreshStores = useCallback(async () => {
     if (!user || !isAuthenticated) {
       setAvailableStores([]);
       setActiveStoreState(null);
       setActiveStoreScope(null);
+      setDataSource("none");
+      setLastSyncedAt(null);
+      setIsHydrating(false);
       return;
     }
 
@@ -51,6 +61,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         : [];
 
       setAvailableStores(resolvedStores);
+      setDataSource("live");
+      const syncedAt = Date.now();
+      setLastSyncedAt(syncedAt);
+      void saveOfflineSnapshot(offlineKeys.stores(user.id), resolvedStores).catch(() => undefined);
       const savedId = localStorage.getItem("printa_active_store_id");
       const savedStore = savedId ? resolvedStores.find((s) => s.id === savedId) ?? null : null;
       setActiveStoreState((previousStore) => {
@@ -63,10 +77,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
       if (resolvedStores.length === 0) localStorage.removeItem("printa_active_store_id");
     } catch {
-      // Never substitute mock records for an unavailable API. Clear the operational scope instead.
-      setAvailableStores([]);
-      setActiveStoreState(null);
-      localStorage.removeItem("printa_active_store_id");
+      // Never substitute mock records for an unavailable API. Show only the last successful
+      // device-local snapshot, clearly marked as offline; otherwise leave operational scope empty.
+      const cached = await loadOfflineSnapshot<Store[]>(offlineKeys.stores(user.id)).catch(() => null);
+      if (cached?.value && Array.isArray(cached.value)) {
+        setAvailableStores(cached.value);
+        setDataSource("offline");
+        setLastSyncedAt(cached.savedAt);
+        const savedId = localStorage.getItem("printa_active_store_id");
+        const savedStore = savedId ? cached.value.find((store) => store.id === savedId) ?? null : null;
+        setActiveStoreState(savedStore ?? (cached.value.length === 1 ? cached.value[0] : null));
+      } else {
+        setAvailableStores([]);
+        setActiveStoreState(null);
+        setDataSource("none");
+        setLastSyncedAt(null);
+        localStorage.removeItem("printa_active_store_id");
+      }
     } finally {
       setIsHydrating(false);
     }
@@ -74,6 +101,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     void refreshStores();
+  }, [refreshStores]);
+
+  useEffect(() => {
+    const handleOffline = () => setIsOffline(true);
+    const handleOnline = () => {
+      setIsOffline(false);
+      void refreshStores();
+    };
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
   }, [refreshStores]);
 
   useEffect(() => {
@@ -135,8 +176,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       refreshStores,
       isStoreSelected,
       needsStoreSelection,
+      dataSource,
+      lastSyncedAt,
+      isOffline,
     }),
-    [activeStore, availableStores, isHydrating, refreshStores, isStoreSelected, needsStoreSelection]
+    [activeStore, availableStores, isHydrating, refreshStores, isStoreSelected, needsStoreSelection, dataSource, lastSyncedAt, isOffline]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

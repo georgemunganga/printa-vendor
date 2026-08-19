@@ -6,6 +6,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import { BackButton } from "@/components/dashboard/BackButton";
 import { VendorOperatingStatusOverlay } from "@/components/dashboard/VendorOperatingStatusOverlay";
+import { OfflineDataStatus } from "@/components/dashboard/OfflineDataStatus";
 import { useAuth } from "@/context/auth-context";
 import { useStore } from "@/context/store-context";
 
@@ -81,6 +82,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, page
           <main
             className={`relative z-10 ${mainPaddingTop} ${mainPaddingBottom} px-4 md:px-6`}
           >
+            <OfflineDataStatus />
             {children}
           </main>
         </div>
