@@ -90,12 +90,13 @@ export const VendorOperatingStatusOverlay: React.FC = () => {
 
   const reasons = status?.blocking_reasons ?? [];
   const hasSubscriptionBlock = reasons.some((reason) => reason.startsWith("SUBSCRIPTION_"));
-  const isSubscriptionRecoveryRoute = location.pathname.replace(/\/$/, "") === "/dashboard/subscription";
+  const isDashboardHome = location.pathname.replace(/\/$/, "") === "/dashboard";
   const showBlockingOverlay = Boolean(status && !status.operational);
 
-  // Subscription setup is a recovery path, not an operational action. The backend continues to
-  // enforce every operational restriction; this only keeps the recovery screen reachable.
-  if (isSubscriptionRecoveryRoute && hasSubscriptionBlock) return null;
+  // The dashboard home is the single location for this notice. Navigation remains available so
+  // vendors can resolve their account requirements; protected operational APIs stay enforced by
+  // the server on every route.
+  if (!isDashboardHome) return null;
   if (!showBlockingOverlay && !error) return null;
 
   return (
