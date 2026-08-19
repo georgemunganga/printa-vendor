@@ -5,6 +5,7 @@ import { PanelLeft } from "lucide-react";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import { BackButton } from "@/components/dashboard/BackButton";
+import { VendorOperatingStatusOverlay } from "@/components/dashboard/VendorOperatingStatusOverlay";
 import { useAuth } from "@/context/auth-context";
 import { useStore } from "@/context/store-context";
 
@@ -85,6 +86,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, page
         </div>
       </div>
       {showBottomNav && <MobileBottomNav />}
+      <VendorOperatingStatusOverlay />
       {!isSidebarOpen && (
         <button
           type="button"
