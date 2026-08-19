@@ -52,7 +52,6 @@ export interface OnboardVendorDto {
   store_country?: string;
   store_latitude?: number;
   store_longitude?: number;
-  staff_pin?: string;
 }
 
 export interface LoginRequestDto {
@@ -210,7 +209,6 @@ export interface StoreStaffDto {
   last_name?: string;
   email?: string;
   is_active: boolean;
-  pin_configured: boolean;
   created_at: ISODateString;
   updated_at: ISODateString;
 }
