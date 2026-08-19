@@ -162,7 +162,7 @@ export const VendorOperatingStatusOverlay: React.FC = () => {
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={() => navigate("/dashboard/support")}>Contact support</Button>
           {hasSubscriptionBlock && (
-            <Button type="button" variant="outline" onClick={() => navigate("/dashboard/subscription")}>Manage subscription</Button>
+            <Button type="button" className="bg-printa-red text-white hover:bg-printa-red/90" onClick={() => navigate("/dashboard/subscription")}>Manage subscription</Button>
           )}
           {status?.grace_eligible && (
             <Button type="button" className="bg-printa-red text-white hover:bg-printa-red/90" onClick={() => void requestGrace()} disabled={isRequestingGrace}>
