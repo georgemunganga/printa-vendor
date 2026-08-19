@@ -35,6 +35,9 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
 import { completePendingVendorOnboarding } from "@/services/vendor-onboarding-completion.service";
 import { getApiErrorMessage } from "@/lib/api";
+import { OnboardingLegalDocumentModal } from "@/components/legal/OnboardingLegalDocumentModal";
+import vendorTermsDraft from "@/content/legal/vendor-terms-v0.1-draft.md?raw";
+import vendorPrivacyNoticeDraft from "@/content/legal/vendor-privacy-notice-v0.1-draft.md?raw";
 
 const TOTAL_STEPS = 5;
 const LUSAKA_CENTER = { lat: -15.3875, lng: 28.3228 };
@@ -123,6 +126,7 @@ const VendorOnboarding: React.FC = () => {
   const [addressQuery, setAddressQuery] = useState("");
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [productSearch, setProductSearch] = useState("");
+  const [openLegalDocument, setOpenLegalDocument] = useState<"terms" | "privacy" | null>(null);
   const autocompleteRef = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesRef = useRef<google.maps.places.PlacesService | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -529,7 +533,15 @@ const VendorOnboarding: React.FC = () => {
                   <input
                     autoFocus
                     value={data.businessName}
-                    onChange={(e) => set({ businessName: e.target.value })}
+                    onChange={(e) => {
+                      const businessName = e.target.value;
+                      set({
+                        businessName,
+                        // The first store takes this single business-name answer. Vendors can
+                        // rename a branch later from Stores instead of repeating this question.
+                        storeName: businessName,
+                      });
+                    }}
                     placeholder="e.g. FastPrint Lusaka"
                     className="mt-8 h-14 rounded-xl border border-gray-200 px-4 text-lg focus:outline-none focus:ring-2 focus:ring-printa-red/40 focus:border-printa-red bg-white"
                     onKeyDown={(e) => e.key === "Enter" && next()}
@@ -572,14 +584,10 @@ const VendorOnboarding: React.FC = () => {
                     Search for your address or tap the map to drop a pin.
                   </p>
 
-                  {/* Store name */}
-                  <input
-                    autoFocus
-                    value={data.storeName}
-                    onChange={(e) => set({ storeName: e.target.value })}
-                    placeholder="Store name (e.g. Main Branch)"
-                    className="mt-5 h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:ring-2 focus:ring-printa-red/40 focus:border-printa-red bg-white"
-                  />
+                  <div className="mt-5 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-gray-700">
+                    <p className="font-semibold text-gray-900">Your first store will use “{data.businessName || "your business name"}”</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">You can add or rename branches later from the Stores page. For now, set the location for your first store.</p>
+                  </div>
 
                   {/* Address search */}
                   <div className="relative mt-3">
@@ -1002,29 +1010,39 @@ const VendorOnboarding: React.FC = () => {
                   )}
 
                   <div className="mt-5 space-y-3 rounded-xl border border-gray-200 bg-white p-4">
-                    <label className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={data.dataConsentAccepted}
-                        onChange={(e) => set({ dataConsentAccepted: e.target.checked })}
-                        className="mt-1 h-4 w-4 rounded border-gray-300 text-printa-red focus:ring-printa-red"
-                      />
-                      <span className="text-sm text-gray-600">
-                        I consent to Printa collecting and processing my business, store, contact, payment, and operational data to create my vendor account, verify my store, route jobs, process payments, and provide platform support.
-                      </span>
-                    </label>
+                    <div className="space-y-2">
+                      <p className="text-sm leading-6 text-gray-600">
+                        Read the full <button type="button" onClick={() => setOpenLegalDocument("privacy")} className="font-semibold text-printa-red underline underline-offset-2 hover:text-red-700">Vendor Privacy Notice</button> before confirming how Printa processes your business, store, contact, payment, and operational data.
+                      </p>
+                      <label className={`flex items-start gap-3 ${data.privacyNoticeRead ? "" : "cursor-not-allowed opacity-50"}`}>
+                        <input
+                          type="checkbox"
+                          disabled={!data.privacyNoticeRead}
+                          checked={data.dataConsentAccepted}
+                          onChange={(e) => set({ dataConsentAccepted: e.target.checked })}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-printa-red focus:ring-printa-red disabled:cursor-not-allowed"
+                        />
+                        <span className="text-sm text-gray-600">I have read the Vendor Privacy Notice and consent to the processing described there for my vendor onboarding and platform operations.</span>
+                      </label>
+                      {!data.privacyNoticeRead && <p className="pl-7 text-xs text-gray-400">Open the Privacy Notice, read it, and select “I have read and understand” to enable this checkbox.</p>}
+                    </div>
 
-                    <label className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={data.platformTermsAccepted}
-                        onChange={(e) => set({ platformTermsAccepted: e.target.checked })}
-                        className="mt-1 h-4 w-4 rounded border-gray-300 text-printa-red focus:ring-printa-red"
-                      />
-                      <span className="text-sm text-gray-600">
-                        I confirm the information provided is accurate and agree to Printa's vendor onboarding, payment, and service quality requirements.
-                      </span>
-                    </label>
+                    <div className="border-t border-gray-100 pt-3 space-y-2">
+                      <p className="text-sm leading-6 text-gray-600">
+                        Read the full <button type="button" onClick={() => setOpenLegalDocument("terms")} className="font-semibold text-printa-red underline underline-offset-2 hover:text-red-700">Vendor Terms and Conditions</button> before accepting Printa’s vendor onboarding, payment, and service-quality requirements.
+                      </p>
+                      <label className={`flex items-start gap-3 ${data.vendorTermsRead ? "" : "cursor-not-allowed opacity-50"}`}>
+                        <input
+                          type="checkbox"
+                          disabled={!data.vendorTermsRead}
+                          checked={data.platformTermsAccepted}
+                          onChange={(e) => set({ platformTermsAccepted: e.target.checked })}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-printa-red focus:ring-printa-red disabled:cursor-not-allowed"
+                        />
+                        <span className="text-sm text-gray-600">I confirm that my information is accurate and agree to the Vendor Terms and Conditions.</span>
+                      </label>
+                      {!data.vendorTermsRead && <p className="pl-7 text-xs text-gray-400">Open the Vendor Terms and Conditions, read them, and select “I have read and understand” to enable this checkbox.</p>}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1055,6 +1073,25 @@ const VendorOnboarding: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      <OnboardingLegalDocumentModal
+        open={openLegalDocument === "privacy"}
+        onOpenChange={(open) => !open && setOpenLegalDocument(null)}
+        title="Vendor Privacy Notice"
+        version="v0.1-draft"
+        document={vendorPrivacyNoticeDraft}
+        acknowledged={data.privacyNoticeRead}
+        onAcknowledge={() => set({ privacyNoticeRead: true })}
+      />
+      <OnboardingLegalDocumentModal
+        open={openLegalDocument === "terms"}
+        onOpenChange={(open) => !open && setOpenLegalDocument(null)}
+        title="Vendor Terms and Conditions"
+        version="v0.1-draft"
+        document={vendorTermsDraft}
+        acknowledged={data.vendorTermsRead}
+        onAcknowledge={() => set({ vendorTermsRead: true })}
+      />
     </div>
   );
 };

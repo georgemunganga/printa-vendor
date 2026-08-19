@@ -36,6 +36,8 @@ export interface VendorOnboardingState {
   paymentDetail: string; // account number or phone number
   dataConsentAccepted: boolean;
   platformTermsAccepted: boolean;
+  privacyNoticeRead: boolean;
+  vendorTermsRead: boolean;
 
   lastUpdatedAt: string | null;
 }
@@ -71,6 +73,8 @@ const defaultState: VendorOnboardingState = {
   paymentDetail: "",
   dataConsentAccepted: false,
   platformTermsAccepted: false,
+  privacyNoticeRead: false,
+  vendorTermsRead: false,
   lastUpdatedAt: null,
 };
 
