@@ -7,7 +7,8 @@ import { useAuth } from "@/context/auth-context";
 import { toast } from "sonner";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { getApiErrorMessage } from "@/lib/api";
-import { clearOnboardingComplete, clearOnboardingState } from "@/lib/vendorOnboardingState";
+import { clearOnboardingComplete, clearOnboardingState, isOnboardingComplete } from "@/lib/vendorOnboardingState";
+import { completePendingVendorOnboarding } from "@/services/vendor-onboarding-completion.service";
 import { authService } from "@/services/auth.service";
 import type { OtpChallengeResponseDto, OtpMethodDto, OtpRequestDto } from "@/services/contracts";
 
@@ -24,7 +25,7 @@ type OTPRouteState = {
 const OTPVerificationPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { completeOtpLogin } = useAuth();
+  const { completeOtpLogin, updateUser } = useAuth();
   const initialState = (location.state || {}) as OTPRouteState;
   const [challenge, setChallenge] = useState(initialState.challenge);
   const [otp, setOtp] = useState(Array(INPUT_LENGTH).fill(""));
@@ -131,7 +132,19 @@ const OTPVerificationPage = () => {
         code,
       });
       await completeOtpLogin(session.token, session.token_type);
-      if (isSignupFlow) {
+      if (isSignupFlow && isOnboardingComplete()) {
+        try {
+          const vendor = await completePendingVendorOnboarding();
+          updateUser({ businessId: vendor.id, businessName: vendor.business_name });
+          clearOnboardingState();
+          clearOnboardingComplete();
+          toast.success("Your business and first store are ready.");
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, "Your account is ready, but we could not create the business and first store yet."));
+          navigate("/onboarding", { replace: true });
+          return;
+        }
+      } else if (isSignupFlow) {
         clearOnboardingState();
         clearOnboardingComplete();
       }

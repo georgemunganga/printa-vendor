@@ -3,10 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { useAuth } from "@/context/auth-context";
+import { getApiErrorMessage } from "@/lib/api";
+import { clearOnboardingComplete, clearOnboardingState, isOnboardingComplete } from "@/lib/vendorOnboardingState";
+import { completePendingVendorOnboarding } from "@/services/vendor-onboarding-completion.service";
 
 const GoogleCallback = () => {
   const navigate = useNavigate();
-  const { completeOAuthLogin } = useAuth();
+  const { completeOAuthLogin, updateUser } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -27,6 +30,20 @@ const GoogleCallback = () => {
       }
       try {
         await completeOAuthLogin(token, tokenType);
+        if (isOnboardingComplete()) {
+          try {
+            const vendor = await completePendingVendorOnboarding();
+            updateUser({ businessId: vendor.id, businessName: vendor.business_name });
+            clearOnboardingState();
+            clearOnboardingComplete();
+          } catch (error) {
+            if (!cancelled) {
+              toast.error(getApiErrorMessage(error, "Your account is ready, but we could not create the business and first store yet."));
+              navigate("/onboarding", { replace: true });
+            }
+            return;
+          }
+        }
         if (!cancelled) {
           window.history.replaceState(null, "", "/auth/google/callback");
           toast.success("Logged in with Google");
@@ -43,7 +60,7 @@ const GoogleCallback = () => {
     return () => {
       cancelled = true;
     };
-  }, [completeOAuthLogin, navigate]);
+  }, [completeOAuthLogin, navigate, updateUser]);
 
   return (
     <AuthLayout>

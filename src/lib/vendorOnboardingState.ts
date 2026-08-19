@@ -15,6 +15,8 @@ export interface VendorOnboardingState {
   // Step 2: First store
   storeName: string;
   storeAddress: string;
+  storeCity: string;
+  storeCountry: string;
   storeLat: number | null;
   storeLng: number | null;
 
@@ -56,6 +58,8 @@ const defaultState: VendorOnboardingState = {
   businessName: "",
   storeName: "",
   storeAddress: "",
+  storeCity: "",
+  storeCountry: "",
   storeLat: null,
   storeLng: null,
   storeHours: DEFAULT_HOURS,

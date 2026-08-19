@@ -18,12 +18,27 @@ export interface UserDto {
   updated_at: ISODateString;
 }
 
+export interface FirstStoreDto {
+  id: UUID;
+  vendor_id: UUID;
+  name: string;
+  address: string;
+  city: string;
+  country: string;
+  latitude?: number;
+  longitude?: number;
+  is_active: boolean;
+  created_at: ISODateString;
+  updated_at: ISODateString;
+}
+
 export interface VendorProfileDto {
   id: UUID;
   owner_id: UUID;
   tier_id: UUID;
   business_name: string;
   tax_id?: string;
+  first_store?: FirstStoreDto;
   created_at: ISODateString;
   updated_at: ISODateString;
 }
@@ -31,6 +46,12 @@ export interface VendorProfileDto {
 export interface OnboardVendorDto {
   business_name: string;
   tax_id?: string;
+  store_name?: string;
+  store_address?: string;
+  store_city?: string;
+  store_country?: string;
+  store_latitude?: number;
+  store_longitude?: number;
 }
 
 export interface LoginRequestDto {

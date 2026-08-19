@@ -21,7 +21,10 @@ import { toast } from "sonner";
 import { GoogleMap, Marker, useLoadScript } from "@react-google-maps/api";
 import { getApiKey } from "../../../config/api-keys";
 import {
+  clearOnboardingComplete,
+  clearOnboardingState,
   getOnboardingState,
+  markOnboardingComplete,
   saveOnboardingState,
   type VendorOnboardingState,
   type DayHours,
@@ -29,6 +32,9 @@ import {
 } from "@/lib/vendorOnboardingState";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/auth-context";
+import { completePendingVendorOnboarding } from "@/services/vendor-onboarding-completion.service";
+import { getApiErrorMessage } from "@/lib/api";
 
 const TOTAL_STEPS = 5;
 const LUSAKA_CENTER = { lat: -15.3875, lng: 28.3228 };
@@ -94,12 +100,25 @@ const to12h = (time24: string) => {
   return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
 };
 
+const getLocationParts = (components?: google.maps.GeocoderAddressComponent[]) => {
+  const find = (...types: string[]) => components?.find((component) =>
+    types.some((type) => component.types.includes(type)),
+  )?.long_name ?? "";
+
+  return {
+    city: find("locality", "postal_town", "administrative_area_level_2", "administrative_area_level_1"),
+    country: find("country"),
+  };
+};
+
 /* ──────────────────────────────────────────────────────────────────── */
 /*  Component                                                          */
 /* ──────────────────────────────────────────────────────────────────── */
 const VendorOnboarding: React.FC = () => {
   const navigate = useNavigate();
+  const { user, updateUser } = useAuth();
   const [data, setData] = useState<VendorOnboardingState>(getOnboardingState);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [dir, setDir] = useState(1);
   const [addressQuery, setAddressQuery] = useState("");
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
@@ -133,7 +152,11 @@ const VendorOnboarding: React.FC = () => {
     switch (step) {
       case 0: return true;
       case 1: return data.businessName.trim().length >= 2;
-      case 2: return data.storeName.trim().length >= 2 && data.storeAddress.trim().length >= 2;
+      case 2:
+        return data.storeName.trim().length >= 2 &&
+          data.storeAddress.trim().length >= 2 &&
+          data.storeCity.trim().length >= 2 &&
+          data.storeCountry.trim().length >= 2;
       case 3: return Object.values(data.storeHours).some((h) => h.enabled);
       case 4: return data.products.length > 0;
       case 5:
@@ -145,11 +168,30 @@ const VendorOnboarding: React.FC = () => {
     }
   };
 
-  const next = () => {
-    if (!canContinue()) return;
+  const next = async () => {
+    if (!canContinue() || isCompleting) return;
     if (step >= TOTAL_STEPS) {
-      toast.info("Continue to account creation. This onboarding draft has not been saved to a Printa vendor profile.");
-      navigate("/signup");
+      if (!user) {
+        saveOnboardingState(data);
+        markOnboardingComplete();
+        toast.info("Create your account to finish setting up your business and first store.");
+        navigate("/signup");
+        return;
+      }
+
+      try {
+        setIsCompleting(true);
+        const vendor = await completePendingVendorOnboarding();
+        updateUser({ businessId: vendor.id, businessName: vendor.business_name });
+        clearOnboardingState();
+        clearOnboardingComplete();
+        toast.success("Your business and first store are ready.");
+        navigate("/dashboard/stores", { replace: true });
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, "We could not create your business and first store. Please try again."));
+      } finally {
+        setIsCompleting(false);
+      }
       return;
     }
     setDir(1);
@@ -216,13 +258,18 @@ const VendorOnboarding: React.FC = () => {
         const geocoder = new google.maps.Geocoder();
         geocoder.geocode({ location: { lat, lng } }, (results, status) => {
           if (status === "OK" && results?.[0]) {
-            set({ storeAddress: results[0].formatted_address });
+            const location = getLocationParts(results[0].address_components);
+            set({
+              storeAddress: results[0].formatted_address,
+              storeCity: location.city || data.storeCity,
+              storeCountry: location.country || data.storeCountry,
+            });
             setAddressQuery(results[0].formatted_address);
           }
         });
       }
     },
-    [set],
+    [data.storeCity, data.storeCountry, set],
   );
 
   const handleMarkerDrag = useCallback(
@@ -234,13 +281,18 @@ const VendorOnboarding: React.FC = () => {
         const geocoder = new google.maps.Geocoder();
         geocoder.geocode({ location: { lat, lng } }, (results, status) => {
           if (status === "OK" && results?.[0]) {
-            set({ storeAddress: results[0].formatted_address });
+            const location = getLocationParts(results[0].address_components);
+            set({
+              storeAddress: results[0].formatted_address,
+              storeCity: location.city || data.storeCity,
+              storeCountry: location.country || data.storeCountry,
+            });
             setAddressQuery(results[0].formatted_address);
           }
         });
       }
     },
-    [set],
+    [data.storeCity, data.storeCountry, set],
   );
 
   const handleAddressSearch = useCallback(
@@ -269,16 +321,22 @@ const VendorOnboarding: React.FC = () => {
       if (!placesRef.current && mapRef.current) {
         placesRef.current = new google.maps.places.PlacesService(mapRef.current);
       }
-      placesRef.current?.getDetails({ placeId, fields: ["geometry"] }, (place) => {
+      placesRef.current?.getDetails({ placeId, fields: ["geometry", "formatted_address", "address_components"] }, (place) => {
         const loc = place?.geometry?.location;
+        const location = getLocationParts(place?.address_components);
+        set({
+          storeAddress: place?.formatted_address || description,
+          storeCity: location.city || data.storeCity,
+          storeCountry: location.country || data.storeCountry,
+          ...(loc ? { storeLat: loc.lat(), storeLng: loc.lng() } : {}),
+        });
         if (loc) {
-          set({ storeLat: loc.lat(), storeLng: loc.lng() });
           mapRef.current?.panTo({ lat: loc.lat(), lng: loc.lng() });
           mapRef.current?.setZoom(17);
         }
       });
     },
-    [set],
+    [data.storeCity, data.storeCountry, set],
   );
 
   const mapCenter = data.storeLat && data.storeLng
@@ -547,6 +605,21 @@ const VendorOnboarding: React.FC = () => {
                         ))}
                       </div>
                     )}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <input
+                      value={data.storeCity}
+                      onChange={(e) => set({ storeCity: e.target.value })}
+                      placeholder="City or town"
+                      className="h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:ring-2 focus:ring-printa-red/40 focus:border-printa-red bg-white"
+                    />
+                    <input
+                      value={data.storeCountry}
+                      onChange={(e) => set({ storeCountry: e.target.value })}
+                      placeholder="Country"
+                      className="h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:ring-2 focus:ring-printa-red/40 focus:border-printa-red bg-white"
+                    />
                   </div>
 
                   {/* Map */}
@@ -962,7 +1035,7 @@ const VendorOnboarding: React.FC = () => {
           <Button
             type="button"
             onClick={next}
-            disabled={!canContinue()}
+            disabled={!canContinue() || isCompleting}
             // whileTap={canContinue() ? { scale: 0.98 } : undefined}
             className={`mt-6 w-full h-14 rounded-xl text-base font-semibold transition-all ${
               canContinue()
@@ -973,7 +1046,11 @@ const VendorOnboarding: React.FC = () => {
             {step === 0
               ? "Get Started"
               : step === TOTAL_STEPS
-                ? "Complete Setup"
+                ? isCompleting
+                  ? "Creating business & store..."
+                  : user
+                    ? "Create Business & Store"
+                    : "Create Account & Store"
                 : "Continue"}
           </Button>
         </div>
