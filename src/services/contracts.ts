@@ -52,6 +52,7 @@ export interface OnboardVendorDto {
   store_country?: string;
   store_latitude?: number;
   store_longitude?: number;
+  staff_pin?: string;
 }
 
 export interface LoginRequestDto {

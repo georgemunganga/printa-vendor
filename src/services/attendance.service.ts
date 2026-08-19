@@ -23,6 +23,14 @@ export const attendanceService = {
     return api.put<void>(`/api/v1/attendance/stores/${storeId}/staff/${userId}/pin`, { pin });
   },
 
+  requestOwnerPINReset(storeId: string) {
+    return api.post<void>(`/api/v1/attendance/stores/${storeId}/owner-pin/reset-request`, {});
+  },
+
+  confirmOwnerPINReset(token: string, pin: string) {
+    return api.post<void>("/api/v1/attendance/owner-pin/reset-confirm", { token, pin });
+  },
+
   clock(storeId: string, userId: string, pin: string) {
     return api.post<ClockResponseDto>(`/api/v1/attendance/stores/${storeId}/clock`, {
       user_id: userId,

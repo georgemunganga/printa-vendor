@@ -76,6 +76,7 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
   const [pinInput, setPinInput] = useState("");
   const [isWrong, setIsWrong] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRequestingReset, setIsRequestingReset] = useState(false);
 
   const storageKey = user ? `${STORAGE_KEY_PREFIX}_${user.id}` : `${STORAGE_KEY_PREFIX}_anon`;
 
@@ -159,6 +160,19 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
       }, 600);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const requestOwnerPINReset = async () => {
+    if (!activeStore) return;
+    setIsRequestingReset(true);
+    try {
+      await attendanceService.requestOwnerPINReset(activeStore.id);
+      toast.success("A secure staff PIN reset link has been sent to your account email.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send the staff PIN reset email.");
+    } finally {
+      setIsRequestingReset(false);
     }
   };
 
@@ -248,6 +262,16 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
           <Check size={16} />
           PIN ready to verify
         </div>
+      )}
+      {user.role?.toUpperCase() === "VENDOR" && (
+        <button
+          type="button"
+          onClick={() => void requestOwnerPINReset()}
+          disabled={isRequestingReset || isSubmitting}
+          className="mt-4 w-full text-center text-xs font-semibold text-printa-red hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isRequestingReset ? "Sending reset email…" : "Forgot your staff PIN? Send a reset email"}
+        </button>
       )}
     </>
   );

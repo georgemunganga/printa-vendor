@@ -27,6 +27,7 @@ import Login from "./pages/auth/Login";
 import SignUp from "./pages/auth/SignUp";
 import Otp from "./pages/auth/Otp";
 import GoogleCallback from "./pages/auth/GoogleCallback";
+import StaffPinReset from "./pages/auth/StaffPinReset";
 import JobDetails from "./pages/dashboard/job/[id]";
 import JobDetailsV2 from "./pages/dashboard/job/[id]-v2";
 import Feedback from "./pages/dashboard/Feedback";
@@ -115,6 +116,7 @@ const App = () => {
                   <Route path="/signup" element={<SignUp />} />
                   <Route path="/otp" element={<Otp />} />
                   <Route path="/auth/google/callback" element={<GoogleCallback />} />
+                  <Route path="/staff-pin/reset" element={<StaffPinReset />} />
                   <Route path="/onboarding" element={<VendorOnboarding />} />
                   <Route path="/how-it-works" element={<HowItWorks />} />
                   <Route path="/pricing" element={<Pricing />} />
