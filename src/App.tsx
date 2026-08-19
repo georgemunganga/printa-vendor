@@ -132,7 +132,7 @@ const App = () => {
                   <Route path="/customize" element={<ProtectedRoute routeScope="store"><Customize /></ProtectedRoute>} />
                   <Route path="/checkout" element={<ProtectedRoute routeScope="store"><Checkout /></ProtectedRoute>} />
                   <Route path="/upload" element={<ProtectedRoute routeScope="store"><Upload /></ProtectedRoute>} />
-                  <Route path="/dashboard" element={<ProtectedRoute routeScope="store"><DashboardV2 /></ProtectedRoute>} />
+                  <Route path="/dashboard" element={<ProtectedRoute routeScope="root"><DashboardV2 /></ProtectedRoute>} />
                   <Route path="/dashboard-old" element={<ProtectedRoute routeScope="store"><Dashboard /></ProtectedRoute>} />
                   <Route path="/dashboard/job-feed" element={<Navigate to="/dashboard/orders" replace />} />
                   <Route path="/dashboard/orders" element={<ProtectedRoute routeScope="store"><OrderHistory /></ProtectedRoute>} />

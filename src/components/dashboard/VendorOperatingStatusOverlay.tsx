@@ -69,6 +69,16 @@ export const VendorOperatingStatusOverlay: React.FC = () => {
     void refresh();
   }, [refresh]);
 
+  const normalizedPath = location.pathname.replace(/\/$/, "");
+  const isDashboardHome = normalizedPath === "/dashboard";
+  const isStoresRoute = normalizedPath === "/dashboard/stores";
+
+  useEffect(() => {
+    if (isStoresRoute && status && !status.operational) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isStoresRoute, navigate, status]);
+
   const requestGrace = async () => {
     setIsRequestingGrace(true);
     try {
@@ -90,7 +100,6 @@ export const VendorOperatingStatusOverlay: React.FC = () => {
 
   const reasons = status?.blocking_reasons ?? [];
   const hasSubscriptionBlock = reasons.some((reason) => reason.startsWith("SUBSCRIPTION_"));
-  const isDashboardHome = location.pathname.replace(/\/$/, "") === "/dashboard";
   const showBlockingOverlay = Boolean(status && !status.operational);
 
   // The dashboard home is the single location for this notice. Navigation remains available so
