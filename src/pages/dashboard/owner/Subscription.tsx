@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { ArrowRight, Check, ChevronDown, CreditCard, Crown, Download, Gem, Receipt, Shield, X } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { ArrowRight, Check, ChevronDown, CreditCard, Crown, Download, Gem, Loader2, Receipt, RefreshCw, Shield, Smartphone, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/context/auth-context";
-import { billingService, type SubscriptionTierDto } from "@/services/billing.service";
+import { billingService, type SubscriptionCheckoutDto, type SubscriptionTierDto } from "@/services/billing.service";
 
 const TIER_PRESENTATION: Record<string, { icon: typeof Shield; accent: "gray" | "red" | "amber" }> = {
   CORE: { icon: Shield, accent: "gray" },
@@ -32,58 +33,135 @@ const SubscriptionPage: React.FC = () => {
   const [billingError, setBillingError] = useState<string | null>(null);
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [showInvoices, setShowInvoices] = useState(false);
+  const [checkout, setCheckout] = useState<SubscriptionCheckoutDto | null>(null);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [operator, setOperator] = useState<"airtel" | "mtn" | "zamtel">("mtn");
+  const [creatingCheckout, setCreatingCheckout] = useState(false);
+  const [requestingCollection, setRequestingCollection] = useState(false);
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [collectionRequested, setCollectionRequested] = useState(false);
+
+  const loadBilling = useCallback(async () => {
+    const vendorId = user?.businessId;
+    if (!vendorId) return;
+
+    const [tierResult, subscriptionResult, invoiceResult] = await Promise.allSettled([
+      billingService.listTiers(),
+      billingService.getSubscription(vendorId),
+      billingService.listInvoices(vendorId),
+    ]);
+
+    if (tierResult.status === "fulfilled") {
+      setTiers([...tierResult.value].sort((a, b) => a.display_order - b.display_order));
+      setCatalogueError(null);
+    } else {
+      setTiers([]);
+      setCatalogueError("Subscription plans are temporarily unavailable. Please try again shortly.");
+    }
+    setCurrentTierID(subscriptionResult.status === "fulfilled" ? subscriptionResult.value.tier_id : null);
+
+    if (invoiceResult.status === "fulfilled") {
+      setInvoices(invoiceResult.value.map((invoice) => ({
+        id: invoice.invoice_number,
+        date: new Date(invoice.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        amount: `${invoice.currency === "ZMW" ? "K" : invoice.currency}${invoice.amount.toFixed(2)}`,
+        status: invoice.status === "PAID" ? "paid" : "free",
+      })));
+      setBillingError(null);
+    } else {
+      setInvoices([]);
+      setBillingError("Unable to load billing history.");
+    }
+  }, [user?.businessId]);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const vendorId = user?.businessId;
-      if (!vendorId) return;
-
-      const [tierResult, subscriptionResult, invoiceResult] = await Promise.allSettled([
-        billingService.listTiers(),
-        billingService.getSubscription(vendorId),
-        billingService.listInvoices(vendorId),
-      ]);
-      if (cancelled) return;
-
-      if (tierResult.status === "fulfilled") {
-        setTiers([...tierResult.value].sort((a, b) => a.display_order - b.display_order));
-        setCatalogueError(null);
-      } else {
-        setTiers([]);
-        setCatalogueError("Subscription plans are temporarily unavailable. Please try again shortly.");
-      }
-
-      if (subscriptionResult.status === "fulfilled") {
-        setCurrentTierID(subscriptionResult.value.tier_id);
-      } else {
-        setCurrentTierID(null);
-      }
-
-      if (invoiceResult.status === "fulfilled") {
-        setInvoices(invoiceResult.value.map((invoice) => ({
-          id: invoice.invoice_number,
-          date: new Date(invoice.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-          amount: `${invoice.currency === "ZMW" ? "K" : invoice.currency}${invoice.amount.toFixed(2)}`,
-          status: invoice.status === "PAID" ? "paid" : "free",
-        })));
-        setBillingError(null);
-      } else {
-        setInvoices([]);
-        setBillingError("Unable to load billing history.");
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user?.businessId]);
+    void loadBilling();
+  }, [loadBilling]);
 
   const current = currentTierID ? tiers.find((tier) => tier.id === currentTierID) : null;
 
-  const explainTierAvailability = (tier: SubscriptionTierDto) => {
-    if (tier.is_available) {
-      toast.info(`${tier.name} is configured, but subscription activation is not available from this page yet.`);
+  const completeCheckout = useCallback((updated: SubscriptionCheckoutDto) => {
+    setCheckout(updated);
+    setCheckoutOpen(false);
+    setCollectionRequested(false);
+    toast.success("Subscription activated. Your plan is now active.");
+    void loadBilling();
+  }, [loadBilling]);
+
+  useEffect(() => {
+    if (!checkoutOpen || !checkout || checkout.status !== "PENDING" || !collectionRequested) return;
+    const timer = window.setInterval(() => {
+      void billingService.verifyCheckout(checkout.id).then((updated) => {
+        setCheckout(updated);
+        if (updated.status === "SUCCESSFUL") completeCheckout(updated);
+      }).catch(() => undefined);
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [checkout, checkoutOpen, collectionRequested, completeCheckout]);
+
+  const startTierCheckout = async (tier: SubscriptionTierDto) => {
+    if (!tier.is_available) {
+      toast.info(`${tier.name} is not commercially configured. Contact Printa to discuss availability.`);
       return;
     }
-    toast.info(`${tier.name} is not commercially configured. Contact Printa to discuss availability.`);
+    setCreatingCheckout(true);
+    try {
+      const session = await billingService.createCheckout(tier.id);
+      setCheckout(session.checkout);
+      setCollectionRequested(Boolean(session.checkout.provider_collection_id));
+      setCheckoutOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to prepare your subscription payment. Please try again.");
+    } finally {
+      setCreatingCheckout(false);
+    }
+  };
+
+  const requestMobileMoneyCollection = async () => {
+    if (!checkout) return;
+    const normalizedPhone = phone.replace(/[\s()-]/g, "").replace(/^\+/, "");
+    if (!/^\d{9,15}$/.test(normalizedPhone)) {
+      toast.error("Enter a valid mobile-money phone number.");
+      return;
+    }
+    setRequestingCollection(true);
+    try {
+      const updated = await billingService.initiateMobileMoneyCollection(checkout.id, { phone: normalizedPhone, operator });
+      setCheckout(updated);
+      if (updated.status === "SUCCESSFUL") {
+        completeCheckout(updated);
+      } else if (updated.status === "FAILED") {
+        toast.error(updated.failure_reason || "The payment request was not completed. Please try again.");
+      } else {
+        setCollectionRequested(true);
+        toast.success("Approval request sent. Confirm it on your mobile phone to continue.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send a mobile-money approval request.");
+    } finally {
+      setRequestingCollection(false);
+    }
+  };
+
+  const checkPaymentStatus = async () => {
+    if (!checkout) return;
+    setCheckingPayment(true);
+    try {
+      const updated = await billingService.verifyCheckout(checkout.id);
+      setCheckout(updated);
+      if (updated.status === "SUCCESSFUL") {
+        completeCheckout(updated);
+      } else if (updated.status === "FAILED") {
+        toast.error(updated.failure_reason || "The payment was not completed. You can try again from the plan catalogue.");
+      } else {
+        toast.info("Payment approval is still pending. Confirm the request on your mobile phone, then check again.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to check payment status. Please try again.");
+    } finally {
+      setCheckingPayment(false);
+    }
   };
 
   return (
@@ -120,7 +198,7 @@ const SubscriptionPage: React.FC = () => {
 
         <div>
           <h3 className="mb-3 text-sm font-semibold text-gray-900">Plan catalogue</h3>
-          <p className="mb-3 text-xs text-gray-500">Only tiers configured in the billing service can be activated. The catalogue does not collect payment details.</p>
+          <p className="mb-3 text-xs text-gray-500">Select a configured plan to pay securely with mobile money. Your plan price is confirmed by Printa before the payment request is sent.</p>
           <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0">
             {tiers.map((tier, index) => {
               const isCurrent = tier.id === currentTierID;
@@ -166,10 +244,12 @@ const SubscriptionPage: React.FC = () => {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => explainTierAvailability(tier)}
-                        className="w-full rounded-xl border border-gray-200 py-2.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 active:scale-[0.97]"
+                        disabled={creatingCheckout}
+                        onClick={() => void startTierCheckout(tier)}
+                        className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 ${tier.is_available ? "bg-printa-red text-white hover:bg-printa-red/90" : "border border-gray-200 text-gray-400"}`}
                       >
-                        {tier.is_available ? "Activation unavailable" : "Not available"}
+                        {creatingCheckout && tier.is_available ? <Loader2 size={14} className="animate-spin" /> : null}
+                        {tier.is_available ? "Subscribe" : "Not available"}
                       </button>
                     )}
                   </div>
@@ -233,6 +313,33 @@ const SubscriptionPage: React.FC = () => {
           <ArrowRight size={16} className="text-gray-300" />
         </Link>
       </div>
+
+      <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+        <DialogContent className="max-w-md border-gray-100 p-0">
+          <div className="p-6">
+            <DialogHeader className="text-left">
+              <div className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-printa-red/10 text-printa-red"><Smartphone size={18} /></div>
+              <DialogTitle className="text-xl text-gray-900">Pay for {checkout?.tier_name ?? "your"} plan</DialogTitle>
+              <DialogDescription className="text-left text-xs leading-5 text-gray-500">Printa will send an approval request to your mobile money number. Confirm it on your phone to activate the subscription.</DialogDescription>
+            </DialogHeader>
+
+            {checkout && <div className="mt-5 rounded-xl bg-gray-50 p-4"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Subscription payment</p><p className="mt-1 text-sm font-semibold text-gray-900">{checkout.tier_name} · monthly</p></div><p className="text-lg font-bold text-gray-900">{formatMonthlyPrice(checkout.amount)}</p></div></div>}
+
+            {checkout?.status === "PENDING" && !collectionRequested && <div className="mt-5 space-y-3">
+              <label className="block text-xs font-semibold text-gray-700" htmlFor="subscription-phone">Mobile money number</label>
+              <input id="subscription-phone" inputMode="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="0977 433 571" className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-printa-red focus:ring-2 focus:ring-printa-red/10" />
+              <label className="block text-xs font-semibold text-gray-700" htmlFor="subscription-operator">Mobile money network</label>
+              <select id="subscription-operator" value={operator} onChange={(event) => setOperator(event.target.value as "airtel" | "mtn" | "zamtel")} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-printa-red focus:ring-2 focus:ring-printa-red/10"><option value="mtn">MTN</option><option value="airtel">Airtel</option><option value="zamtel">Zamtel</option></select>
+              <p className="text-[11px] leading-4 text-gray-400">Your number is used only to request this subscription payment. Printa does not store card details in the portal.</p>
+              <button type="button" disabled={requestingCollection} onClick={() => void requestMobileMoneyCollection()} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-printa-red text-sm font-semibold text-white transition hover:bg-printa-red/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60">{requestingCollection ? <Loader2 size={16} className="animate-spin" /> : <Smartphone size={16} />}{requestingCollection ? "Sending request..." : "Send approval request"}</button>
+            </div>}
+
+            {checkout?.status === "PENDING" && collectionRequested && <div className="mt-5 space-y-4"><div className="rounded-xl border border-amber-100 bg-amber-50 p-4"><p className="text-sm font-semibold text-amber-900">Awaiting your mobile approval</p><p className="mt-1 text-xs leading-5 text-amber-800">Confirm the payment prompt on your mobile phone. This screen will check for confirmation automatically while it is open.</p></div><button type="button" disabled={checkingPayment} onClick={() => void checkPaymentStatus()} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-printa-red text-sm font-semibold text-white transition hover:bg-printa-red/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60">{checkingPayment ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}{checkingPayment ? "Checking payment..." : "I have approved — check status"}</button></div>}
+
+            {checkout?.status === "FAILED" && <div className="mt-5 rounded-xl border border-red-100 bg-red-50 p-4 text-xs leading-5 text-red-800">{checkout.failure_reason || "This payment request was not completed. Close this sheet and select the plan again to try a new request."}</div>}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

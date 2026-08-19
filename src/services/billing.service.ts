@@ -27,6 +27,31 @@ export interface SubscriptionTierDto {
   }>;
 }
 
+export interface SubscriptionCheckoutDto {
+  id: string;
+  vendor_id: string;
+  tier_id: string;
+  tier_name: string;
+  amount: number;
+  currency: string;
+  reference: string;
+  status: "PENDING" | "SUCCESSFUL" | "FAILED" | "EXPIRED";
+  provider_collection_id?: string;
+  provider_status?: string;
+  expires_at: string;
+  completed_at?: string;
+  failure_reason?: string;
+}
+
+export interface CheckoutSessionDto {
+  checkout: SubscriptionCheckoutDto;
+}
+
+export interface InitiateMobileMoneyCollectionRequest {
+  phone: string;
+  operator: "airtel" | "mtn" | "zamtel";
+}
+
 export interface BillingInvoiceDto {
   id: string;
   invoice_number: string;
@@ -49,5 +74,17 @@ export const billingService = {
 
   listInvoices(vendorId: string) {
     return api.get<BillingInvoiceDto[]>(`/api/v1/billing/invoices/vendor/${vendorId}`);
+  },
+
+  createCheckout(tierId: string) {
+    return api.post<CheckoutSessionDto>("/api/v1/billing/subscription-checkouts", { tier_id: tierId });
+  },
+
+  initiateMobileMoneyCollection(checkoutId: string, request: InitiateMobileMoneyCollectionRequest) {
+    return api.post<SubscriptionCheckoutDto>(`/api/v1/billing/subscription-checkouts/${checkoutId}/mobile-money`, request);
+  },
+
+  verifyCheckout(checkoutId: string) {
+    return api.post<SubscriptionCheckoutDto>(`/api/v1/billing/subscription-checkouts/${checkoutId}/verify`);
   },
 };
