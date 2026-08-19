@@ -160,7 +160,7 @@ const StoresPage: React.FC = () => {
     setSwitchingStoreId(null);
     toast.dismiss();
     toast.success(`Switched to ${store.name}`);
-    navigate("/dashboard");
+    navigate("/dashboard/store");
   };
 
   const handleBackToRoot = () => {

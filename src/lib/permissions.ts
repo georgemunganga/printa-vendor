@@ -82,7 +82,7 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
   {
     icon: Home,
     name: "Dashboard",
-    path: "/dashboard",
+    path: "/dashboard/store",
     requiredPermissions: ["view_dashboard"],
     requiresStore: true,
   },

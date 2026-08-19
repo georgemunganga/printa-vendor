@@ -18,7 +18,7 @@ interface DashboardLayoutProps {
 
 const PRIMARY_TABS = [
   "/dashboard",
-  "/dashboardv2",
+  "/dashboard/store",
   "/dashboard/orders",
   "/dashboard/profile",
   "/dashboard/pos",

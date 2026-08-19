@@ -37,9 +37,9 @@ export const StoreEntrypoint: React.FC = () => {
     // Set the authorized live store in context.
     setActiveStore(storeData);
 
-    // Redirect to dashboard; global store-lock overlay will request PIN entry.
+    // Open the selected store's live dashboard; the global store-lock overlay will request PIN entry.
     toast.success(`Welcome to ${storeData.name}`);
-    navigate("/dashboard");
+    navigate("/dashboard/store");
   }, [storeName, navigate, setActiveStore, availableStores, isHydrating]);
 
   // Show loading state
