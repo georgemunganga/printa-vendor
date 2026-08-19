@@ -186,6 +186,8 @@ export interface CreateStoreDto {
   country: string;
   phone?: string;
   email?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface UpdateStoreDto {

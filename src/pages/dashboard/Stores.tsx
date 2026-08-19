@@ -24,6 +24,7 @@ import type { Store as StoreType } from "@/types";
 import { inventoryService } from "@/services/inventory.service";
 import { vendorService } from "@/services/vendor.service";
 import { vendorPolicyService, type VendorPolicyConsentStatusDto } from "@/services/vendor-policy.service";
+import { AddStoreWizardModal } from "@/components/dashboard/AddStoreWizardModal";
 
 interface StoreFormState {
   businessName: string;
@@ -59,6 +60,7 @@ const StoresPage: React.FC = () => {
   } = useStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddStoreWizardOpen, setIsAddStoreWizardOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<StoreType | null>(null);
   const [form, setForm] = useState<StoreFormState>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
@@ -121,7 +123,11 @@ const StoresPage: React.FC = () => {
     setEditingStore(null);
     setForm(emptyForm);
     setPolicyAccepted(false);
-    if (!user?.businessId) void loadPolicyStatus();
+    if (user?.businessId) {
+      setIsAddStoreWizardOpen(true);
+      return;
+    }
+    void loadPolicyStatus();
     setIsModalOpen(true);
   };
 
@@ -461,6 +467,13 @@ const StoresPage: React.FC = () => {
           </button>
         </motion.div>
       )}
+
+      <AddStoreWizardModal
+        open={isAddStoreWizardOpen}
+        vendorId={user?.businessId || ""}
+        onOpenChange={setIsAddStoreWizardOpen}
+        onCreated={refreshStores}
+      />
 
       <ResponsiveModal
         open={isModalOpen}
