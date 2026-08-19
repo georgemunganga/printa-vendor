@@ -6,8 +6,9 @@ import { getApiKey } from "../../../config/api-keys";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Button } from "@/components/ui/button";
 import { inventoryService } from "@/services/inventory.service";
+import { vendorService } from "@/services/vendor.service";
 import { operatingHoursService } from "@/services/operating-hours.service";
-import type { StoreDto } from "@/services/contracts";
+import type { StoreDto, VendorProfileDto } from "@/services/contracts";
 import { clearOfflineDraft, loadOfflineDraft, offlineKeys, saveOfflineDraft } from "@/lib/offline-store";
 
 const MAP_LIBRARIES: ("places")[] = ["places"];
@@ -51,6 +52,8 @@ const defaultDraft = (): StoreDraft => ({
 
 type AddStoreSavedDraft = {
   step: number;
+  businessName: string;
+  taxId: string;
   draft: StoreDraft;
   hours: Hours;
   addressQuery: string;
@@ -84,18 +87,31 @@ const getLocationParts = (components?: google.maps.GeocoderAddressComponent[]) =
 
 interface AddStoreWizardModalProps {
   open: boolean;
-  vendorId: string;
+  vendorId?: string;
+  draftOwnerId: string;
+  setupBusiness?: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (store: StoreDto) => Promise<void> | void;
+  onBusinessCreated?: (vendor: VendorProfileDto) => Promise<void> | void;
+  policyGate?: {
+    loading: boolean;
+    error: string | null;
+    acceptanceRequired: boolean;
+    accepted: boolean;
+    onAcceptedChange: (accepted: boolean) => void;
+    policies: Array<{ id: string; title: string; version: string; document_url?: string }>;
+  };
+  onBeforeCreate?: () => Promise<boolean> | boolean;
 }
 
 /**
- * Authenticated additional-store flow. It intentionally uses the same location
- * and operating-hours interaction patterns as vendor onboarding while creating
- * only a new store for an already established vendor profile.
+ * Authenticated store setup flow. It uses the onboarding location and operating-hours
+ * interaction model for both an initial vendor business/store setup and later branches.
  */
-export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }: AddStoreWizardModalProps) {
+export function AddStoreWizardModal({ open, vendorId, draftOwnerId, setupBusiness = false, onOpenChange, onCreated, onBusinessCreated, policyGate, onBeforeCreate }: AddStoreWizardModalProps) {
   const [step, setStep] = useState(1);
+  const [businessName, setBusinessName] = useState("");
+  const [taxId, setTaxId] = useState("");
   const [draft, setDraft] = useState<StoreDraft>(defaultDraft);
   const [hours, setHours] = useState<Hours>(defaultHours);
   const [addressQuery, setAddressQuery] = useState("");
@@ -113,6 +129,8 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
 
   const reset = useCallback(() => {
     setStep(1);
+    setBusinessName("");
+    setTaxId("");
     setDraft(defaultDraft());
     setHours(defaultHours());
     setAddressQuery("");
@@ -127,7 +145,7 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
     }
     setIsDraftReady(false);
     let cancelled = false;
-    void loadOfflineDraft<AddStoreSavedDraft>(offlineKeys.addStoreDraft(vendorId))
+    void loadOfflineDraft<AddStoreSavedDraft>(offlineKeys.addStoreDraft(draftOwnerId))
       .then((saved) => {
         if (cancelled) return;
         if (!saved?.value) {
@@ -136,6 +154,8 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
           return;
         }
         setStep(saved.value.step);
+        setBusinessName(saved.value.businessName ?? "");
+        setTaxId(saved.value.taxId ?? "");
         setDraft(saved.value.draft);
         setHours(saved.value.hours);
         setAddressQuery(saved.value.addressQuery);
@@ -148,12 +168,12 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
         setIsDraftReady(true);
       });
     return () => { cancelled = true; };
-  }, [open, reset, vendorId]);
+  }, [open, reset, draftOwnerId]);
 
   useEffect(() => {
     if (!open || !isDraftReady || isSaving) return;
-    void saveOfflineDraft<AddStoreSavedDraft>(offlineKeys.addStoreDraft(vendorId), { step, draft, hours, addressQuery }).catch(() => undefined);
-  }, [open, isDraftReady, isSaving, step, draft, hours, addressQuery, vendorId]);
+    void saveOfflineDraft<AddStoreSavedDraft>(offlineKeys.addStoreDraft(draftOwnerId), { step, businessName, taxId, draft, hours, addressQuery }).catch(() => undefined);
+  }, [open, isDraftReady, isSaving, step, businessName, taxId, draft, hours, addressQuery, draftOwnerId]);
 
   useEffect(() => {
     if (isLoaded && !autocompleteRef.current) {
@@ -223,7 +243,7 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
     setHours((current) => ({ ...current, [day]: { ...current[day], [field]: value } }));
   };
 
-  const validLocation = draft.name.trim().length >= 2 && draft.address.trim().length >= 2 && draft.city.trim().length >= 2 && draft.country.trim().length >= 2;
+  const validLocation = (!setupBusiness || businessName.trim().length >= 2) && draft.name.trim().length >= 2 && draft.address.trim().length >= 2 && draft.city.trim().length >= 2 && draft.country.trim().length >= 2;
   const hasHours = DAYS.some(({ key }) => hours[key].enabled);
   const mapCenter = draft.latitude !== null && draft.longitude !== null ? { lat: draft.latitude, lng: draft.longitude } : LUSAKA_CENTER;
   const reviewLocation = draft.address.includes(draft.city) && draft.address.includes(draft.country)
@@ -246,19 +266,53 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
       toast.error("You are offline. This store setup has been saved on this device and can be submitted when you reconnect.");
       return;
     }
+    if (onBeforeCreate && !(await onBeforeCreate())) return;
 
     setIsSaving(true);
     try {
-      const store = await inventoryService.createStore({
-        vendor_id: vendorId,
-        name: draft.name.trim(),
-        address: draft.address.trim(),
-        city: draft.city.trim(),
-        country: draft.country.trim(),
-        phone: draft.phone.trim() || undefined,
-        email: draft.email.trim() || undefined,
-        ...(draft.latitude !== null && draft.longitude !== null ? { latitude: draft.latitude, longitude: draft.longitude } : {}),
-      });
+      let store: StoreDto;
+      let createdBusiness: VendorProfileDto | undefined;
+
+      if (setupBusiness) {
+        const vendor = await vendorService.onboard({
+          business_name: businessName.trim(),
+          tax_id: taxId.trim() || undefined,
+          store_name: draft.name.trim(),
+          store_address: draft.address.trim(),
+          store_city: draft.city.trim(),
+          store_country: draft.country.trim(),
+          ...(draft.latitude !== null && draft.longitude !== null ? { store_latitude: draft.latitude, store_longitude: draft.longitude } : {}),
+        });
+        if (!vendor.first_store) {
+          throw new Error("Printa created the business profile but did not return the first store. Please contact support before retrying.");
+        }
+        createdBusiness = vendor;
+        store = {
+          id: vendor.first_store.id,
+          vendor_id: vendor.first_store.vendor_id,
+          name: vendor.first_store.name,
+          address: vendor.first_store.address,
+          city: vendor.first_store.city,
+          country: vendor.first_store.country,
+          phone: draft.phone.trim() || undefined,
+          email: draft.email.trim() || undefined,
+          is_active: vendor.first_store.is_active,
+          created_at: vendor.first_store.created_at,
+          updated_at: vendor.first_store.updated_at,
+        };
+      } else {
+        if (!vendorId) throw new Error("A Printa business profile is required before adding another store.");
+        store = await inventoryService.createStore({
+          vendor_id: vendorId,
+          name: draft.name.trim(),
+          address: draft.address.trim(),
+          city: draft.city.trim(),
+          country: draft.country.trim(),
+          phone: draft.phone.trim() || undefined,
+          email: draft.email.trim() || undefined,
+          ...(draft.latitude !== null && draft.longitude !== null ? { latitude: draft.latitude, longitude: draft.longitude } : {}),
+        });
+      }
 
       try {
         await operatingHoursService.replace(store.id, {
@@ -273,9 +327,10 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
         toast.error(error instanceof Error ? `Store created, but its operating hours could not be saved: ${error.message}` : "Store created, but its operating hours could not be saved.");
       }
 
+      if (createdBusiness) await onBusinessCreated?.(createdBusiness);
       await onCreated(store);
-      await clearOfflineDraft(offlineKeys.addStoreDraft(vendorId)).catch(() => undefined);
-      toast.success(`${store.name} has been added.`);
+      await clearOfflineDraft(offlineKeys.addStoreDraft(draftOwnerId)).catch(() => undefined);
+      toast.success(setupBusiness ? "Your business profile and first store have been created." : `${store.name} has been added.`);
       onOpenChange(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to create the store.");
@@ -292,8 +347,8 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
     <ResponsiveModal
       open={open}
       onOpenChange={close}
-      title="Add another store"
-      description="Create a new physical storefront for your existing Printa business."
+      title={setupBusiness ? "Set up your business" : "Add another store"}
+      description={setupBusiness ? "Create your Printa business profile and first store in one guided setup." : "Create a new physical storefront for your existing Printa business."}
       className="max-h-[92vh] overflow-hidden p-0 sm:max-w-4xl"
     >
       <div className="flex min-h-[590px] max-h-[calc(92vh-6rem)] flex-col bg-gray-50">
@@ -302,7 +357,7 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-printa-red"><Store size={18} /></div>
               <div>
-                <p className="text-sm font-semibold text-gray-900">New store setup</p>
+                <p className="text-sm font-semibold text-gray-900">{setupBusiness ? "Business and first store setup" : "New store setup"}</p>
                 <p className="text-xs text-gray-400">Step {step} of 3</p>
               </div>
             </div>
@@ -322,9 +377,10 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
             <div className="space-y-4">
               <div>
                 <div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-50 text-printa-red"><MapPin size={16} /></div><h2 className="text-xl font-bold text-gray-900">Where is this store?</h2></div>
-                <p className="ml-11 mt-1 text-sm text-gray-400">Search for the address or tap the map to drop a pin.</p>
+                <p className="ml-11 mt-1 text-sm text-gray-400">{setupBusiness ? "Start with your business, then search for the first store address or tap the map to drop a pin." : "Search for the address or tap the map to drop a pin."}</p>
               </div>
-              <input value={draft.name} onChange={(event) => updateDraft({ name: event.target.value })} placeholder="Store name (e.g. Main Branch)" className="h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" />
+              {setupBusiness && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="Business name" className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" /><input value={taxId} onChange={(event) => setTaxId(event.target.value)} placeholder="Tax ID (optional)" className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" /></div>}
+              <input value={draft.name} onChange={(event) => updateDraft({ name: event.target.value })} placeholder={setupBusiness ? "First store name (e.g. Main Branch)" : "Store name (e.g. Main Branch)"} className="h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" />
               <div className="relative">
                 <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
                 <input value={addressQuery} onChange={(event) => handleAddressSearch(event.target.value)} placeholder="Search address…" className="h-12 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" />
@@ -340,12 +396,12 @@ export function AddStoreWizardModal({ open, vendorId, onOpenChange, onCreated }:
 
           {step === 2 && <div className="space-y-4"><div><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-50 text-printa-red"><Clock size={16} /></div><h2 className="text-xl font-bold text-gray-900">When is this store open?</h2></div><p className="ml-11 mt-1 text-sm text-gray-400">Set the days and hours customers can expect this branch to operate.</p></div><div className="space-y-2">{DAYS.map(({ key, label }) => { const day = hours[key]; return <div key={key} className={`rounded-xl border ${day.enabled ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50"}`}><div className="flex items-center gap-3 px-4 py-3"><button type="button" aria-label={`Toggle ${label}`} onClick={() => toggleDay(key)} className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${day.enabled ? "bg-printa-red" : "bg-gray-200"}`}><span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${day.enabled ? "translate-x-[18px]" : "translate-x-0.5"}`} /></button><div className="min-w-0 flex-1"><p className={`text-sm font-semibold ${day.enabled ? "text-gray-900" : "text-gray-400"}`}>{label}</p><p className="text-xs text-gray-400">{day.enabled ? "Open" : "Closed"}</p></div>{day.enabled && <div className="flex shrink-0 items-center gap-2"><input type="time" value={day.open} onChange={(event) => setDayTime(key, "open", event.target.value)} className="h-9 w-[100px] rounded-lg border border-gray-200 bg-gray-50 px-2 text-sm" /><span className="text-xs text-gray-300">to</span><input type="time" value={day.close} onChange={(event) => setDayTime(key, "close", event.target.value)} className="h-9 w-[100px] rounded-lg border border-gray-200 bg-gray-50 px-2 text-sm" /></div>}</div></div>; })}</div></div>}
 
-          {step === 3 && <div className="space-y-5"><div><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-50 text-printa-red"><Check size={16} /></div><h2 className="text-xl font-bold text-gray-900">Review your new store</h2></div><p className="ml-11 mt-1 text-sm text-gray-400">Add optional contact details, then create this additional branch.</p></div><div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"><p className="font-semibold text-gray-900">{draft.name || "New store"}</p><div className="mt-2 flex items-start gap-2 text-sm text-gray-500"><MapPin size={15} className="mt-0.5 shrink-0 text-printa-red" /><span>{reviewLocation || "Location details pending"}</span></div><p className="mt-3 text-xs text-gray-400">Open {DAYS.filter(({ key }) => hours[key].enabled).length} day{DAYS.filter(({ key }) => hours[key].enabled).length === 1 ? "" : "s"} a week</p></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><input value={draft.phone} onChange={(event) => updateDraft({ phone: event.target.value })} placeholder="Store phone (optional)" className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" /><input type="email" value={draft.email} onChange={(event) => updateDraft({ email: event.target.value })} placeholder="Store email (optional)" className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" /></div><div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">This creates an additional store under your existing Printa business. Your business profile and current stores will remain unchanged.</div></div>}
+          {step === 3 && <div className="space-y-5"><div><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-50 text-printa-red"><Check size={16} /></div><h2 className="text-xl font-bold text-gray-900">{setupBusiness ? "Review your business and first store" : "Review your new store"}</h2></div><p className="ml-11 mt-1 text-sm text-gray-400">{setupBusiness ? "Add optional contact details, then create your Printa business and first store." : "Add optional contact details, then create this additional branch."}</p></div>{setupBusiness && <div className="rounded-2xl border border-red-100 bg-red-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-printa-red">Printa business</p><p className="mt-1 font-semibold text-gray-900">{businessName || "Business name pending"}</p>{taxId && <p className="mt-1 text-xs text-gray-500">Tax ID: {taxId}</p>}</div>}<div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"><p className="font-semibold text-gray-900">{draft.name || "New store"}</p><div className="mt-2 flex items-start gap-2 text-sm text-gray-500"><MapPin size={15} className="mt-0.5 shrink-0 text-printa-red" /><span>{reviewLocation || "Location details pending"}</span></div><p className="mt-3 text-xs text-gray-400">Open {DAYS.filter(({ key }) => hours[key].enabled).length} day{DAYS.filter(({ key }) => hours[key].enabled).length === 1 ? "" : "s"} a week</p></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><input value={draft.phone} onChange={(event) => updateDraft({ phone: event.target.value })} placeholder="Store phone (optional)" className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" /><input type="email" value={draft.email} onChange={(event) => updateDraft({ email: event.target.value })} placeholder="Store email (optional)" className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" /></div><div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">{setupBusiness ? "This creates your Printa business profile and first store together. They are saved as one server-confirmed setup." : "This creates an additional store under your existing Printa business. Your business profile and current stores will remain unchanged."}</div>{policyGate?.loading ? <p className="text-xs text-gray-500">Checking current vendor policies…</p> : policyGate?.error ? <p className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-printa-red">The current vendor policies could not be verified. Reconnect and try again before creating this store.</p> : policyGate?.acceptanceRequired ? <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs leading-5 text-gray-700"><p className="font-semibold text-gray-900">Vendor Terms and Privacy Notice</p><div className="mt-2 space-y-1">{policyGate.policies.map((policy) => policy.document_url ? <a key={policy.id} href={policy.document_url} target="_blank" rel="noreferrer" className="block font-semibold text-printa-red hover:underline">Read {policy.title} ({policy.version})</a> : <p key={policy.id} className="font-semibold">{policy.title} ({policy.version})</p>)}</div><label className="mt-3 flex items-start gap-2"><input type="checkbox" checked={policyGate.accepted} onChange={(event) => policyGate.onAcceptedChange(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-printa-red focus:ring-printa-red" /><span>I have read and agree to the current required vendor policies.</span></label></div> : null}</div>}
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-white px-5 py-4 sm:px-7">
           <Button type="button" variant="outline" onClick={() => step === 1 ? close(false) : setStep((current) => current - 1)} disabled={isSaving} className="rounded-xl">{step === 1 ? "Cancel" : <><ArrowLeft size={16} className="mr-1" />Back</>}</Button>
-          {step < 3 ? <Button type="button" onClick={() => { if (step === 1 && !validLocation) { toast.error("Store name, address, city, and country are required."); return; } if (step === 2 && !hasHours) { toast.error("Choose at least one open day."); return; } setStep((current) => current + 1); }} className="rounded-xl bg-printa-red text-white hover:bg-red-700">Continue</Button> : <Button type="button" onClick={() => void createStore()} disabled={isSaving} className="rounded-xl bg-printa-red text-white hover:bg-red-700">{isSaving ? "Creating store..." : "Create Store"}</Button>}
+          {step < 3 ? <Button type="button" onClick={() => { if (step === 1 && !validLocation) { toast.error(setupBusiness ? "Business name, store name, address, city, and country are required." : "Store name, address, city, and country are required."); return; } if (step === 2 && !hasHours) { toast.error("Choose at least one open day."); return; } setStep((current) => current + 1); }} className="rounded-xl bg-printa-red text-white hover:bg-red-700">Continue</Button> : <Button type="button" onClick={() => void createStore()} disabled={isSaving} className="rounded-xl bg-printa-red text-white hover:bg-red-700">{isSaving ? (setupBusiness ? "Creating business..." : "Creating store...") : (setupBusiness ? "Create Business & Store" : "Create Store")}</Button>}
         </div>
       </div>
     </ResponsiveModal>

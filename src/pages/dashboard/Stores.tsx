@@ -123,12 +123,9 @@ const StoresPage: React.FC = () => {
     setEditingStore(null);
     setForm(emptyForm);
     setPolicyAccepted(false);
-    if (user?.businessId) {
-      setIsAddStoreWizardOpen(true);
-      return;
-    }
     void loadPolicyStatus();
-    setIsModalOpen(true);
+    // Both first-store setup and later branch creation use the same responsive wizard.
+    setIsAddStoreWizardOpen(true);
   };
 
   const openEditModal = (store: StoreType) => {
@@ -470,15 +467,46 @@ const StoresPage: React.FC = () => {
 
       <AddStoreWizardModal
         open={isAddStoreWizardOpen}
-        vendorId={user?.businessId || ""}
+        vendorId={user?.businessId || undefined}
+        draftOwnerId={user?.id || "anonymous"}
+        setupBusiness={!user?.businessId}
         onOpenChange={setIsAddStoreWizardOpen}
+        onBusinessCreated={(vendor) => {
+          updateUser({ businessId: vendor.id, businessName: vendor.business_name });
+        }}
+        policyGate={{
+          loading: isPolicyLoading,
+          error: policyLoadError,
+          acceptanceRequired: Boolean(policyStatus?.acceptance_required),
+          accepted: policyAccepted,
+          onAcceptedChange: setPolicyAccepted,
+          policies: policyStatus?.required_policies ?? [],
+        }}
+        onBeforeCreate={async () => {
+          if (isPolicyLoading) {
+            toast.error("Please wait while Printa checks the current vendor policies.");
+            return false;
+          }
+          if (policyLoadError) {
+            toast.error("The current vendor policies could not be verified. Please retry before creating this store.");
+            return false;
+          }
+          if (policyStatus?.acceptance_required) {
+            if (!policyAccepted) {
+              toast.error("Please confirm acceptance of the current required vendor policies.");
+              return false;
+            }
+            return acceptCurrentPolicies();
+          }
+          return true;
+        }}
         onCreated={refreshStores}
       />
 
       <ResponsiveModal
-        open={isModalOpen}
+        open={isModalOpen && Boolean(editingStore)}
         onOpenChange={closeModal}
-        title={editingStore ? "Edit Store" : user?.businessId ? "Create Store" : "Set Up Your Business"}
+        title="Edit Store"
       >
         <div className="space-y-4">
           {!editingStore && !user?.businessId && (
