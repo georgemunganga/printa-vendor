@@ -5,65 +5,17 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { useAuth } from "@/context/auth-context";
-import { billingService } from "@/services/billing.service";
+import { billingService, type SubscriptionTierDto } from "@/services/billing.service";
 
-const TIERS = [
-  {
-    id: "core",
-    name: "Core",
-    icon: Shield,
-    price: "K0",
-    period: "/mo",
-    desc: "For getting started",
-    accent: "gray",
-    configured: true,
-    features: [
-      { text: "20 jobs/day", included: true },
-      { text: "3 team members", included: true },
-      { text: "Standard routing", included: true },
-      { text: "Basic reporting", included: true },
-      { text: "Priority routing", included: false },
-      { text: "SLA guarantees", included: false },
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    icon: Gem,
-    price: "Not configured",
-    period: "",
-    desc: "Commercial configuration pending",
-    accent: "red",
-    popular: true,
-    configured: false,
-    features: [
-      { text: "100 jobs/day", included: true },
-      { text: "10 team members", included: true },
-      { text: "Priority routing", included: true },
-      { text: "Advanced reporting", included: true },
-      { text: "2-hour handoff SLA", included: true },
-      { text: "Bulk price updates", included: true },
-    ],
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    icon: Crown,
-    price: "Not configured",
-    period: "",
-    desc: "Commercial configuration pending",
-    accent: "amber",
-    configured: false,
-    features: [
-      { text: "Unlimited jobs/day", included: true },
-      { text: "Unlimited team", included: true },
-      { text: "Highest priority", included: true },
-      { text: "Custom SLA", included: true },
-      { text: "Account manager", included: true },
-      { text: "API access", included: true },
-    ],
-  },
-] as const;
+const TIER_PRESENTATION: Record<string, { icon: typeof Shield; accent: "gray" | "red" | "amber" }> = {
+  CORE: { icon: Shield, accent: "gray" },
+  PRO: { icon: Gem, accent: "red" },
+  ENTERPRISE: { icon: Crown, accent: "amber" },
+};
+
+const formatMonthlyPrice = (price: number) => `K${new Intl.NumberFormat("en-ZM", { maximumFractionDigits: 2 }).format(price)}`;
+
+const tierPresentation = (tier: SubscriptionTierDto) => TIER_PRESENTATION[tier.name.toUpperCase()] ?? { icon: Shield, accent: "gray" as const };
 
 interface Invoice {
   id: string;
@@ -74,9 +26,11 @@ interface Invoice {
 
 const SubscriptionPage: React.FC = () => {
   const { user } = useAuth();
-  const [currentTier, setCurrentTier] = useState<string | null>(null);
+  const [tiers, setTiers] = useState<SubscriptionTierDto[]>([]);
+  const [currentTierID, setCurrentTierID] = useState<string | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [showInvoices, setShowInvoices] = useState(false);
 
   useEffect(() => {
@@ -84,38 +38,49 @@ const SubscriptionPage: React.FC = () => {
     void (async () => {
       const vendorId = user?.businessId;
       if (!vendorId) return;
-      try {
-        const [subscription, liveInvoices] = await Promise.all([
-          billingService.getSubscription(vendorId),
-          billingService.listInvoices(vendorId),
-        ]);
-        if (!cancelled) {
-          const tierId = subscription.tier_name?.toLowerCase();
-          setCurrentTier(tierId && TIERS.some((tier) => tier.id === tierId) ? tierId : null);
-          setBillingError(null);
-          setInvoices(liveInvoices.map((invoice) => ({
-            id: invoice.invoice_number,
-            date: new Date(invoice.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-            amount: `${invoice.currency === "ZMW" ? "K" : invoice.currency}${invoice.amount.toFixed(2)}`,
-            status: invoice.status === "PAID" ? "paid" : "free",
-          })));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setCurrentTier(null);
-          setInvoices([]);
-          setBillingError(error instanceof Error ? error.message : "Unable to load subscription details.");
-        }
+
+      const [tierResult, subscriptionResult, invoiceResult] = await Promise.allSettled([
+        billingService.listTiers(),
+        billingService.getSubscription(vendorId),
+        billingService.listInvoices(vendorId),
+      ]);
+      if (cancelled) return;
+
+      if (tierResult.status === "fulfilled") {
+        setTiers([...tierResult.value].sort((a, b) => a.display_order - b.display_order));
+        setCatalogueError(null);
+      } else {
+        setTiers([]);
+        setCatalogueError("Subscription plans are temporarily unavailable. Please try again shortly.");
+      }
+
+      if (subscriptionResult.status === "fulfilled") {
+        setCurrentTierID(subscriptionResult.value.tier_id);
+      } else {
+        setCurrentTierID(null);
+      }
+
+      if (invoiceResult.status === "fulfilled") {
+        setInvoices(invoiceResult.value.map((invoice) => ({
+          id: invoice.invoice_number,
+          date: new Date(invoice.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+          amount: `${invoice.currency === "ZMW" ? "K" : invoice.currency}${invoice.amount.toFixed(2)}`,
+          status: invoice.status === "PAID" ? "paid" : "free",
+        })));
+        setBillingError(null);
+      } else {
+        setInvoices([]);
+        setBillingError("Unable to load billing history.");
       }
     })();
     return () => { cancelled = true; };
   }, [user?.businessId]);
 
-  const current = currentTier ? TIERS.find((tier) => tier.id === currentTier) : null;
+  const current = currentTierID ? tiers.find((tier) => tier.id === currentTierID) : null;
 
-  const explainTierAvailability = (tier: (typeof TIERS)[number]) => {
-    if (tier.configured) {
-      toast.info("The Core tier is configured, but subscription activation is not available from this page yet.");
+  const explainTierAvailability = (tier: SubscriptionTierDto) => {
+    if (tier.is_available) {
+      toast.info(`${tier.name} is configured, but subscription activation is not available from this page yet.`);
       return;
     }
     toast.info(`${tier.name} is not commercially configured. Contact Printa to discuss availability.`);
@@ -140,8 +105,8 @@ const SubscriptionPage: React.FC = () => {
               <h2 className="text-xl font-bold">{current ? current.name : "No active plan"}</h2>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold">{current ? current.price : "—"}</p>
-              {current?.period && <p className="text-[11px] text-white/40">{current.period}</p>}
+              <p className="text-2xl font-bold">{current ? formatMonthlyPrice(current.monthly_price) : "—"}</p>
+              {current && <p className="text-[11px] text-white/40">/mo</p>}
             </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
@@ -157,9 +122,9 @@ const SubscriptionPage: React.FC = () => {
           <h3 className="mb-3 text-sm font-semibold text-gray-900">Plan catalogue</h3>
           <p className="mb-3 text-xs text-gray-500">Only tiers configured in the billing service can be activated. The catalogue does not collect payment details.</p>
           <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0">
-            {TIERS.map((tier, index) => {
-              const isCurrent = tier.id === currentTier;
-              const Icon = tier.icon;
+            {tiers.map((tier, index) => {
+              const isCurrent = tier.id === currentTierID;
+              const { icon: Icon, accent } = tierPresentation(tier);
               return (
                 <motion.div
                   key={tier.id}
@@ -170,18 +135,18 @@ const SubscriptionPage: React.FC = () => {
                 >
                   <div className="p-4 pb-3">
                     <div className="mb-3 flex items-center gap-2">
-                      <div className={`rounded-xl p-1.5 ${tier.accent === "red" ? "bg-printa-red/10 text-printa-red" : tier.accent === "amber" ? "bg-amber-100 text-amber-600" : "bg-gray-100 text-gray-600"}`}>
+                      <div className={`rounded-xl p-1.5 ${accent === "red" ? "bg-printa-red/10 text-printa-red" : accent === "amber" ? "bg-amber-100 text-amber-600" : "bg-gray-100 text-gray-600"}`}>
                         <Icon size={14} />
                       </div>
                       <span className="text-xs font-semibold text-gray-900">{tier.name}</span>
-                      {tier.popular && <span className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-printa-red px-2 py-0.5 text-[9px] font-bold uppercase text-white">Popular</span>}
+                      {tier.is_popular && <span className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-printa-red px-2 py-0.5 text-[9px] font-bold uppercase text-white">Popular</span>}
                       {isCurrent && <span className="ml-auto text-[10px] font-semibold text-gray-400">Current</span>}
                     </div>
                     <div className="mb-1 flex items-baseline gap-1">
-                      <span className="text-2xl font-bold text-gray-900">{tier.price}</span>
-                      {tier.period && <span className="text-xs text-gray-400">{tier.period}</span>}
+                      <span className="text-2xl font-bold text-gray-900">{formatMonthlyPrice(tier.monthly_price)}</span>
+                      <span className="text-xs text-gray-400">/mo</span>
                     </div>
-                    <p className="text-[11px] text-gray-400">{tier.desc}</p>
+                    <p className="text-[11px] text-gray-400">{tier.description}</p>
                   </div>
 
                   <div className="flex-1 px-4 pb-4">
@@ -204,7 +169,7 @@ const SubscriptionPage: React.FC = () => {
                         onClick={() => explainTierAvailability(tier)}
                         className="w-full rounded-xl border border-gray-200 py-2.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 active:scale-[0.97]"
                       >
-                        {tier.configured ? "Activation unavailable" : "Not available"}
+                        {tier.is_available ? "Activation unavailable" : "Not available"}
                       </button>
                     )}
                   </div>
@@ -212,6 +177,8 @@ const SubscriptionPage: React.FC = () => {
               );
             })}
           </div>
+          {catalogueError && <p className="mt-3 text-center text-xs text-gray-400">{catalogueError}</p>}
+          {!catalogueError && tiers.length === 0 && <p className="mt-3 text-center text-xs text-gray-400">No subscription plans are currently available.</p>}
         </div>
 
         <div>

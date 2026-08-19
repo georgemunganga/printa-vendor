@@ -13,6 +13,20 @@ export interface SubscriptionDto {
   auto_renew: boolean;
 }
 
+export interface SubscriptionTierDto {
+  id: string;
+  name: string;
+  monthly_price: number;
+  description: string;
+  display_order: number;
+  is_available: boolean;
+  is_popular: boolean;
+  features: Array<{
+    text: string;
+    included: boolean;
+  }>;
+}
+
 export interface BillingInvoiceDto {
   id: string;
   invoice_number: string;
@@ -25,6 +39,10 @@ export interface BillingInvoiceDto {
 }
 
 export const billingService = {
+  listTiers() {
+    return api.get<SubscriptionTierDto[]>("/api/v1/billing/tiers");
+  },
+
   getSubscription(vendorId: string) {
     return api.get<SubscriptionDto>(`/api/v1/billing/subscriptions/vendor/${vendorId}`);
   },
