@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { useStore } from "@/context/store-context";
 import type { Permission } from "@/types";
+import { StartupRecoveryScreen } from "@/components/app/StartupRecoveryScreen";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -32,7 +33,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const location = useLocation();
 
   if (isAuthLoading) {
-    return null;
+    return <StartupRecoveryScreen stage="session" />;
   }
 
   if (!isAuthenticated || !user) {
@@ -40,7 +41,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   if (isHydrating) {
-    return null;
+    return <StartupRecoveryScreen stage="stores" />;
   }
 
   if (routeScope === "store") {

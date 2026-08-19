@@ -11,6 +11,8 @@ export interface ApiRequestOptions extends Omit<RequestInit, "body"> {
   idempotencyKey?: string;
 }
 
+const REQUEST_TIMEOUT_MS = 15_000;
+
 const buildUrl = (path: string, query?: Record<string, QueryValue>) => {
   const url = new URL(apiUrl(path));
   if (query) {
@@ -59,18 +61,43 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     requestBody = JSON.stringify(body);
   }
 
-  const response = await fetch(buildUrl(path, query), {
-    ...init,
-    headers: requestHeaders,
-    body: requestBody,
-  });
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+  const abortFromCaller = () => controller.abort();
+  init.signal?.addEventListener("abort", abortFromCaller, { once: true });
 
-  const responseBody = await parseBody(response);
-  if (!response.ok) {
-    throw new ApiError(getErrorMessage(responseBody, response.statusText), response.status, responseBody);
+  try {
+    const response = await fetch(buildUrl(path, query), {
+      ...init,
+      signal: controller.signal,
+      headers: requestHeaders,
+      body: requestBody,
+    });
+
+    const responseBody = await parseBody(response);
+    if (!response.ok) {
+      throw new ApiError(getErrorMessage(responseBody, response.statusText), response.status, responseBody);
+    }
+
+    return responseBody as T;
+  } catch (error) {
+    if (timedOut) {
+      const offline = typeof navigator !== "undefined" && !navigator.onLine;
+      throw new ApiError(
+        offline ? "You are offline. Reconnect to continue syncing with Printa." : "Printa took too long to respond. Please check your connection and try again.",
+        0,
+        undefined,
+      );
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+    init.signal?.removeEventListener("abort", abortFromCaller);
   }
-
-  return responseBody as T;
 }
 
 export const api = {
