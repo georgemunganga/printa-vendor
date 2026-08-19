@@ -210,6 +210,7 @@ export interface StoreStaffDto {
   last_name?: string;
   email?: string;
   is_active: boolean;
+  pin_configured: boolean;
   created_at: ISODateString;
   updated_at: ISODateString;
 }

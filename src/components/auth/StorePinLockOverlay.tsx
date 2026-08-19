@@ -16,6 +16,7 @@ type Employee = {
   role: string;
   avatar: string;
   status: "active" | "off";
+  pinConfigured: boolean;
 };
 
 const roleLabel: Record<string, string> = {
@@ -35,7 +36,7 @@ const toInitials = (name: string) =>
 
 const isStoreScopedPath = (pathname: string): boolean => {
   const exact = new Set([
-    "/dashboard",
+    "/dashboard/store",
     "/dashboard-old",
     "/dashboard/orders",
     "/dashboard/locations",
@@ -77,6 +78,8 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
   const [isWrong, setIsWrong] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRequestingReset, setIsRequestingReset] = useState(false);
+  const [initialPIN, setInitialPIN] = useState("");
+  const [pinSetupStage, setPinSetupStage] = useState<"create" | "confirm">("create");
 
   const storageKey = user ? `${STORAGE_KEY_PREFIX}_${user.id}` : `${STORAGE_KEY_PREFIX}_anon`;
 
@@ -106,6 +109,7 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
             role: roleLabel[member.role.toLowerCase()] ?? "Staff",
             avatar: toInitials(name),
             status: member.is_active ? "active" : "off",
+            pinConfigured: Boolean(member.pin_configured),
           };
         })
         .sort((a, b) => {
@@ -135,13 +139,14 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
   const signedInEmployee = scopedEmployees.find((employee) => employee.id === user?.id) ?? null;
   const assignedProfiles = scopedEmployees.filter((employee) => employee.id !== user?.id);
   const requiresLock = Boolean(activeStore) && isStoreScopedPath(pathname) && !unlockMap[activeStore?.id ?? ""];
+  const needsInitialOwnerPIN = user?.role?.toUpperCase() === "VENDOR" && selectedEmployee?.id === user?.id && !selectedEmployee.pinConfigured;
 
   if (!requiresLock || !activeStore || !user) {
     return null;
   }
 
-  const unlockStore = async (pin: string) => {
-    if (!selectedEmployee) return;
+  const unlockStore = async (pin: string, announce = true): Promise<boolean> => {
+    if (!selectedEmployee) return false;
     setIsSubmitting(true);
     try {
       const result = await attendanceService.clock(activeStore.id, selectedEmployee.id, pin);
@@ -150,7 +155,10 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
       if (typeof window !== "undefined") {
         sessionStorage.setItem(storageKey, JSON.stringify(nextMap));
       }
-      toast.success(result.event.event_type === "CLOCK_IN" ? "Clocked in and store unlocked" : "Clocked out and store unlocked");
+      if (announce) {
+        toast.success(result.event.event_type === "CLOCK_IN" ? "Clocked in and store unlocked" : "Clocked out and store unlocked");
+      }
+      return true;
     } catch (error) {
       setIsWrong(true);
       toast.error(error instanceof Error ? error.message : "Unable to verify the staff PIN.");
@@ -158,6 +166,44 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
         setPinInput("");
         setIsWrong(false);
       }, 600);
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const submitPIN = async () => {
+    if (!selectedEmployee || pinInput.length < 4) return;
+    if (!needsInitialOwnerPIN) {
+      await unlockStore(pinInput);
+      return;
+    }
+    if (pinSetupStage === "create") {
+      setInitialPIN(pinInput);
+      setPinInput("");
+      setPinSetupStage("confirm");
+      setIsWrong(false);
+      return;
+    }
+    if (initialPIN !== pinInput) {
+      setIsWrong(true);
+      toast.error("The staff PINs do not match. Please try again.");
+      setPinInput("");
+      setInitialPIN("");
+      setPinSetupStage("create");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await attendanceService.setStaffPIN(activeStore!.id, user.id, pinInput);
+      const unlocked = await unlockStore(pinInput, false);
+      if (unlocked) {
+        toast.success("Staff PIN set and store unlocked.");
+      }
+    } catch (error) {
+      setIsWrong(true);
+      toast.error(error instanceof Error ? error.message : "Unable to set the staff PIN.");
     } finally {
       setIsSubmitting(false);
     }
@@ -192,6 +238,8 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
   const selectEmployee = (employeeId: string, openMobilePinPad = false) => {
     setSelectedId(employeeId);
     setPinInput("");
+    setInitialPIN("");
+    setPinSetupStage("create");
     setIsWrong(false);
     if (openMobilePinPad) setMobileView("pin");
   };
@@ -203,11 +251,11 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
       <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-4">
         <LockKeyhole size={24} className="text-gray-400" />
       </div>
-      <p className="text-center text-sm text-gray-500 mb-1">Clock in as</p>
+      <p className="text-center text-sm text-gray-500 mb-1">{needsInitialOwnerPIN ? "Set up access for" : "Clock in as"}</p>
       <p className="text-center text-lg font-semibold text-gray-900 mb-2">
         {selectedEmployee?.name ?? user.name}
       </p>
-      <p className="text-center text-xs text-gray-400 mb-6">Enter the 4–6 digit staff PIN</p>
+      <p className="text-center text-xs text-gray-400 mb-6">{needsInitialOwnerPIN ? (pinSetupStage === "create" ? "Create a 4–6 digit staff PIN for this store" : "Re-enter your new staff PIN to confirm it") : "Enter the 4–6 digit staff PIN"}</p>
 
       <div className="flex justify-center gap-3 mb-6">
         {dots.map((filled, idx) => (
@@ -252,18 +300,18 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
       <Button
         type="button"
         disabled={isSubmitting || pinInput.length < 4 || !selectedEmployee}
-        onClick={() => void unlockStore(pinInput)}
+        onClick={() => void submitPIN()}
         className="mt-5 w-full"
       >
-        {isSubmitting ? "Verifying PIN…" : "Clock In"}
+        {isSubmitting ? (needsInitialOwnerPIN ? "Setting PIN…" : "Verifying PIN…") : needsInitialOwnerPIN ? (pinSetupStage === "create" ? "Continue" : "Set Staff PIN") : "Clock In"}
       </Button>
       {pinInput.length >= 4 && !isWrong && !isSubmitting && (
         <div className="mt-4 flex items-center justify-center gap-2 text-emerald-600 text-sm font-medium">
           <Check size={16} />
-          PIN ready to verify
+          {needsInitialOwnerPIN ? (pinSetupStage === "create" ? "PIN ready to confirm" : "PIN ready to set") : "PIN ready to verify"}
         </div>
       )}
-      {user.role?.toUpperCase() === "VENDOR" && (
+      {!needsInitialOwnerPIN && user.role?.toUpperCase() === "VENDOR" && (
         <button
           type="button"
           onClick={() => void requestOwnerPINReset()}
