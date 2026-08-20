@@ -14,7 +14,10 @@ export interface ApiRequestOptions extends Omit<RequestInit, "body"> {
 const REQUEST_TIMEOUT_MS = 15_000;
 
 const buildUrl = (path: string, query?: Record<string, QueryValue>) => {
-  const url = new URL(apiUrl(path));
+  // Production uses an absolute API origin. Local test mode intentionally uses
+  // `/api` so Vite can proxy same-origin traffic without broadening API CORS.
+  const baseOrigin = typeof window === "undefined" ? "http://localhost" : window.location.origin;
+  const url = new URL(apiUrl(path), baseOrigin);
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
       if (value === undefined || value === null || value === "") return;

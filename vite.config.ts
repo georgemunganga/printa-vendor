@@ -7,6 +7,18 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    // Used only with `vite --mode local-test` and VITE_API_BASE_URL=/.
+    // The browser stays same-origin with Vite while Vite securely proxies to
+    // production; no local browser origin is added to production CORS.
+    proxy: mode === "local-test"
+      ? {
+          "/api": {
+            target: "https://api.printa.co.zm",
+            changeOrigin: true,
+            secure: true,
+          },
+        }
+      : undefined,
   },
   plugins: [
     react(),

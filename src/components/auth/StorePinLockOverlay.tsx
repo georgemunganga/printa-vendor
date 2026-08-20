@@ -139,7 +139,10 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
   const signedInEmployee = scopedEmployees.find((employee) => employee.id === user?.id) ?? null;
   const assignedProfiles = scopedEmployees.filter((employee) => employee.id !== user?.id);
   const requiresLock = Boolean(activeStore) && isStoreScopedPath(pathname) && !unlockMap[activeStore?.id ?? ""];
-  const needsInitialOwnerPIN = user?.role?.toUpperCase() === "VENDOR" && selectedEmployee?.id === user?.id && !selectedEmployee.pinConfigured;
+  // The portal normalizes the backend VENDOR role to the owner UI role. Keep
+  // both representations here so first-time setup is not skipped after login.
+  const isStoreOwner = user?.role?.toLowerCase() === "owner" || user?.role?.toUpperCase() === "VENDOR";
+  const needsInitialOwnerPIN = isStoreOwner && selectedEmployee?.id === user?.id && !selectedEmployee.pinConfigured;
 
   if (!requiresLock || !activeStore || !user) {
     return null;
@@ -311,7 +314,7 @@ export const StorePinLockOverlay: React.FC<StorePinLockOverlayProps> = ({ pathna
           {needsInitialOwnerPIN ? (pinSetupStage === "create" ? "PIN ready to confirm" : "PIN ready to set") : "PIN ready to verify"}
         </div>
       )}
-      {!needsInitialOwnerPIN && user.role?.toUpperCase() === "VENDOR" && (
+      {!needsInitialOwnerPIN && isStoreOwner && (
         <button
           type="button"
           onClick={() => void requestOwnerPINReset()}
