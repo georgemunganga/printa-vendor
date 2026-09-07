@@ -20,7 +20,8 @@ import { useJobContext } from "@/context/job-context";
 import { useStore } from "@/context/store-context";
 import { PrintJob } from "@/types";
 import { Button } from "@/components/ui/button";
-import { productionService, type ProductionJobDto } from "@/services/production.service";
+import { ordersService } from "@/services/orders.service";
+import type { OrderDto, OrderStatusDto } from "@/services/contracts";
 
 /* ─── Channel filter ─── */
 type ChannelFilter = "all" | "online" | "walk-in";
@@ -45,22 +46,41 @@ const statusFilters: { key: StatusFilter; label: string }[] = [
 const formatDate = (date: Date) =>
   date.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-const toPrintJob = (job: ProductionJobDto): PrintJob => ({
-  id: job.id,
-  fileName: `Production job ${job.order_id.slice(0, 8)}`,
-  status: job.status === "QUEUED" ? "pending" : job.status === "COMPLETED" ? "delivered" : job.status === "CANCELLED" ? "cancelled" : "printing",
-  totalPrice: 0,
-  pageCount: 1,
-  copies: 1,
-  colorMode: "color",
-  printer: { name: "Production queue" },
-  createdAt: new Date(job.created_at),
-  lastUpdated: new Date(job.updated_at),
-  productionStartedAt: job.started_at ? new Date(job.started_at) : undefined,
-  readyAt: job.completed_at ? new Date(job.completed_at) : undefined,
-  notes: job.notes,
-  orderChannel: "online",
-});
+const toPrintJobStatus = (status: OrderStatusDto): PrintJob["status"] => {
+  switch (status) {
+    case "PENDING":
+    case "CONFIRMED":
+      return "pending";
+    case "IN_PRODUCTION":
+      return "printing";
+    case "READY":
+      return "ready";
+    case "DELIVERED":
+      return "delivered";
+    case "CANCELLED":
+      return "cancelled";
+    default:
+      return "pending";
+  }
+};
+
+const toPrintJob = (order: OrderDto): PrintJob => {
+  const itemCount = order.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 1;
+  return {
+    id: order.id,
+    fileName: `${order.order_number}${order.channel === "POS" ? " · POS sale" : ""}`,
+    status: toPrintJobStatus(order.status),
+    totalPrice: order.total,
+    pageCount: itemCount,
+    copies: itemCount,
+    colorMode: "color",
+    printer: { name: order.channel === "POS" ? "Walk-in till" : "Production queue" },
+    createdAt: new Date(order.created_at),
+    lastUpdated: new Date(order.updated_at),
+    notes: order.notes,
+    orderChannel: order.channel === "POS" ? "walk-in" : "online",
+  };
+};
 
 /* ─── Order Card ─── */
 const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
@@ -103,7 +123,7 @@ const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
 
       {/* Bottom row: price + date + chevron */}
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-        <span className="text-sm font-bold text-gray-900">${order.totalPrice.toFixed(2)}</span>
+        <span className="text-sm font-bold text-gray-900">K{order.totalPrice.toFixed(2)}</span>
         <div className="flex items-center gap-1.5 text-xs text-gray-400">
           <span>{formatDate(order.createdAt)}</span>
           <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-400 transition" />
@@ -132,8 +152,8 @@ const OrderHistoryPage: React.FC = () => {
         return;
       }
       try {
-        const productionJobs = await productionService.listStoreJobs(activeStore.id);
-        if (!cancelled) setJobs(productionJobs.map(toPrintJob));
+        const orders = await ordersService.listByStore(activeStore.id);
+        if (!cancelled) setJobs(orders.map(toPrintJob));
       } catch {
         if (!cancelled) setJobs(fallbackJobs);
       }
