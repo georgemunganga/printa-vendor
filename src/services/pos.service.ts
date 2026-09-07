@@ -20,7 +20,7 @@ export const posService = {
     payment_method: "CASH" | "CARD" | "MOBILE_MONEY" | "VOUCHER";
     reference?: string;
     notes?: string;
-  }) {
-    return api.post<POSTransactionDto>("/api/v1/pos/transactions", payload);
+  }, idempotencyKey?: string) {
+    return api.post<POSTransactionDto>("/api/v1/pos/transactions", payload, { idempotencyKey });
   },
 };

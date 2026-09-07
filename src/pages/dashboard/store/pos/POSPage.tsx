@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -88,6 +88,11 @@ const categories: ServiceCategory[] = [
 
 const TAX_RATE = 0.16;
 
+const createClientId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 const escapeReceiptText = (value: string) =>
   value
     .replace(/&/g, "&amp;")
@@ -112,6 +117,7 @@ const POSPage: React.FC = () => {
   const [receiptEmail, setReceiptEmail] = useState("");
   const [showEmailReceiptForm, setShowEmailReceiptForm] = useState(false);
   const [isSendingReceipt, setIsSendingReceipt] = useState(false);
+  const cartIdRef = useRef(createClientId());
 
   const servicesForStore = liveServices;
 
@@ -190,7 +196,14 @@ const POSPage: React.FC = () => {
   };
 
   const removeItem = (serviceId: string) => setOrder((prev) => prev.filter((l) => l.service.id !== serviceId));
-  const clearOrder = () => setOrder([]);
+  const resetCartId = () => {
+    cartIdRef.current = createClientId();
+  };
+
+  const clearOrder = () => {
+    setOrder([]);
+    resetCartId();
+  };
 
   const subtotal = order.reduce((sum, l) => sum + l.service.price * l.qty, 0);
   const tax = subtotal * TAX_RATE;
@@ -208,12 +221,13 @@ const POSPage: React.FC = () => {
     try {
       const saleLines = order.map((line) => ({ ...line }));
       const requiresProduction = saleLines.some((line) => line.service.requiresProduction);
+      const checkoutId = cartIdRef.current;
       const createdOrder = await ordersService.place({
         store_id: activeStore.id,
         channel: "POS",
         items: saleLines.map((line) => ({ vendor_store_product_id: line.service.id, quantity: line.qty })),
         notes: orderKindNote(requiresProduction ? "print_job" : "retail_sale"),
-      });
+      }, `pos-order-${activeStore.id}-${checkoutId}`);
       const method = paymentMethod === "cash" ? "CASH" : paymentMethod === "card" ? "CARD" : "MOBILE_MONEY";
       await posService.recordPayment({
         order_id: createdOrder.id,
@@ -221,7 +235,7 @@ const POSPage: React.FC = () => {
         amount: createdOrder.total,
         payment_method: method,
         notes: "Recorded from Vendor POS terminal",
-      });
+      }, `pos-payment-${createdOrder.id}-${checkoutId}`);
       setCompletedSale({
         order: createdOrder,
         lines: saleLines,
@@ -232,6 +246,8 @@ const POSPage: React.FC = () => {
       toast.success(`Sale complete: ${formatMoney(createdOrder.total, createdOrder.currency)}`);
       setOrder([]);
       setShowMobileOrder(false);
+      resetCartId();
+      setCatalogueReloadKey((current) => current + 1);
       return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to complete the POS transaction.");
