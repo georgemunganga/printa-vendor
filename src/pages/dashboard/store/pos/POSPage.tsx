@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   BookOpen,
   Camera,
@@ -12,6 +13,10 @@ import {
   Newspaper,
   Package,
   Plus,
+  Printer,
+  Mail,
+  CheckCircle2,
+  ExternalLink,
   Search,
   Shirt,
   ShoppingCart,
@@ -22,12 +27,15 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { POSOrderSummary, POSRightOrderPanel } from "@/components/dashboard/pos/POSRightOrderPanel";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { useStore } from "@/context/store-context";
 import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
 import { ordersService } from "@/services/orders.service";
 import { posService } from "@/services/pos.service";
 import { isPrintProduct, orderKindNote } from "@/lib/order-kind";
+import { formatMoney } from "@/lib/money";
+import type { OrderDto } from "@/services/contracts";
 
 interface ServiceCategory {
   id: string;
@@ -51,6 +59,14 @@ interface OrderLine {
   qty: number;
 }
 
+interface CompletedSale {
+  order: OrderDto;
+  lines: OrderLine[];
+  paymentMethod: "cash" | "card" | "ewallet";
+  requiresProduction: boolean;
+  completedAt: Date;
+}
+
 const categories: ServiceCategory[] = [
   { id: "all", name: "All", icon: ShoppingCart, color: "text-gray-700", bg: "bg-gray-100", border: "border-gray-300" },
   { id: "s1", name: "Paper Printing", icon: FileText, color: "text-printa-red", bg: "bg-red-50", border: "border-red-200" },
@@ -69,6 +85,14 @@ const categories: ServiceCategory[] = [
 
 const TAX_RATE = 0.16;
 
+const escapeReceiptText = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
 const POSPage: React.FC = () => {
   const { activeStore } = useStore();
   const [activeCategory, setActiveCategory] = useState("all");
@@ -81,6 +105,7 @@ const POSPage: React.FC = () => {
   const [catalogueLoading, setCatalogueLoading] = useState(false);
   const [catalogueReloadKey, setCatalogueReloadKey] = useState(0);
   const [isCharging, setIsCharging] = useState(false);
+  const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
 
   const servicesForStore = liveServices;
 
@@ -167,19 +192,20 @@ const POSPage: React.FC = () => {
   const itemCount = order.reduce((sum, l) => sum + l.qty, 0);
   const hasItems = order.length > 0;
 
-  const handleCharge = async () => {
-    if (!order.length || isCharging) return;
+  const handleCharge = async (): Promise<boolean> => {
+    if (!order.length || isCharging) return false;
     if (!activeStore?.id) {
       toast.error("Live POS checkout requires an available store inventory connection.");
-      return;
+      return false;
     }
     setIsCharging(true);
     try {
-      const requiresProduction = order.some((line) => line.service.requiresProduction);
+      const saleLines = order.map((line) => ({ ...line }));
+      const requiresProduction = saleLines.some((line) => line.service.requiresProduction);
       const createdOrder = await ordersService.place({
         store_id: activeStore.id,
         channel: "POS",
-        items: order.map((line) => ({ vendor_store_product_id: line.service.id, quantity: line.qty })),
+        items: saleLines.map((line) => ({ vendor_store_product_id: line.service.id, quantity: line.qty })),
         notes: orderKindNote(requiresProduction ? "print_job" : "retail_sale"),
       });
       const method = paymentMethod === "cash" ? "CASH" : paymentMethod === "card" ? "CARD" : "MOBILE_MONEY";
@@ -190,14 +216,82 @@ const POSPage: React.FC = () => {
         payment_method: method,
         notes: "Recorded from Vendor POS terminal",
       });
-      toast.success(`Order charged: K${createdOrder.total.toFixed(2)}`);
+      setCompletedSale({
+        order: createdOrder,
+        lines: saleLines,
+        paymentMethod,
+        requiresProduction,
+        completedAt: new Date(),
+      });
+      toast.success(`Sale complete: ${formatMoney(createdOrder.total, createdOrder.currency)}`);
       setOrder([]);
       setShowMobileOrder(false);
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to complete the POS transaction.");
+      return false;
     } finally {
       setIsCharging(false);
     }
+  };
+
+  const printReceipt = () => {
+    if (!completedSale) return;
+    const receiptWindow = window.open("", "_blank", "width=420,height=720");
+    if (!receiptWindow) {
+      toast.error("Allow popups to print the receipt.");
+      return;
+    }
+
+    const rows = completedSale.lines
+      .map((line) => `
+        <tr>
+          <td>${escapeReceiptText(line.service.name)}</td>
+          <td style="text-align:center">${line.qty}</td>
+          <td style="text-align:right">${formatMoney(line.service.price * line.qty, completedSale.order.currency)}</td>
+        </tr>`)
+      .join("");
+
+    receiptWindow.document.write(`<!doctype html>
+      <html>
+        <head>
+          <title>Receipt ${completedSale.order.order_number}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 24px; color: #111827; }
+            h1 { font-size: 20px; margin: 0 0 4px; }
+            .muted { color: #6b7280; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 13px; }
+            td { padding: 8px 0; border-bottom: 1px dashed #e5e7eb; }
+            .total { display: flex; justify-content: space-between; font-size: 18px; font-weight: 700; margin-top: 16px; }
+          </style>
+        </head>
+        <body>
+          <h1>${escapeReceiptText(activeStore?.name ?? "Printa Vendor")}</h1>
+          <div class="muted">${completedSale.order.order_number}</div>
+          <div class="muted">${completedSale.completedAt.toLocaleString()}</div>
+          <table>${rows}</table>
+          <div class="total"><span>Total</span><span>${formatMoney(completedSale.order.total, completedSale.order.currency)}</span></div>
+          <p class="muted">Payment: ${completedSale.paymentMethod === "ewallet" ? "E-Wallet" : completedSale.paymentMethod === "cash" ? "Cash" : "Debit Card"}</p>
+        </body>
+      </html>`);
+    receiptWindow.document.close();
+    receiptWindow.focus();
+    receiptWindow.print();
+  };
+
+  const emailReceipt = () => {
+    if (!completedSale) return;
+    const subject = encodeURIComponent(`Receipt ${completedSale.order.order_number}`);
+    const body = encodeURIComponent([
+      `${activeStore?.name ?? "Printa Vendor"} receipt`,
+      `Order: ${completedSale.order.order_number}`,
+      `Total: ${formatMoney(completedSale.order.total, completedSale.order.currency)}`,
+      `Payment: ${completedSale.paymentMethod === "ewallet" ? "E-Wallet" : completedSale.paymentMethod === "cash" ? "Cash" : "Debit Card"}`,
+      "",
+      "Items:",
+      ...completedSale.lines.map((line) => `- ${line.qty} x ${line.service.name} = ${formatMoney(line.service.price * line.qty, completedSale.order.currency)}`),
+    ].join("\n"));
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
   return (
@@ -224,10 +318,7 @@ const POSPage: React.FC = () => {
               onUpdateQty={updateQty}
               onRemove={removeItem}
               onClear={clearOrder}
-              onCharge={() => {
-                handleCharge();
-                setShowMobileOrder(false);
-              }}
+              onCharge={handleCharge}
               catMap={catMap}
               paymentMethod={paymentMethod}
               onPaymentMethodChange={setPaymentMethod}
@@ -392,6 +483,83 @@ const POSPage: React.FC = () => {
           onPaymentMethodChange={setPaymentMethod}
         />
       </div>
+
+
+      <ResponsiveModal
+        open={Boolean(completedSale)}
+        onOpenChange={(open) => { if (!open) setCompletedSale(null); }}
+        className="sm:max-w-lg"
+        title={
+          <span className="flex items-center gap-2">
+            <CheckCircle2 size={20} className="text-emerald-600" />
+            Sale complete
+          </span>
+        }
+        description="Receipt actions are ready for this completed POS sale."
+      >
+        {completedSale && (
+          <div className="space-y-5 py-2">
+            <div className="rounded-3xl bg-gray-950 p-5 text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-white/50">Order</p>
+                  <h3 className="mt-1 text-lg font-bold">{completedSale.order.order_number}</h3>
+                  <p className="mt-1 text-xs text-white/50">
+                    {completedSale.requiresProduction ? "Print job added to production queue" : "Till sale recorded"}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs uppercase tracking-wider text-white/50">Total paid</p>
+                  <p className="mt-1 text-2xl font-bold">{formatMoney(completedSale.order.total, completedSale.order.currency)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              {completedSale.lines.map((line) => (
+                <div key={line.service.id} className="flex items-center justify-between rounded-2xl bg-gray-50 px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-gray-900">{line.service.name}</p>
+                    <p className="text-xs text-gray-400">Qty {line.qty}</p>
+                  </div>
+                  <p className="font-bold text-gray-900">{formatMoney(line.service.price * line.qty, completedSale.order.currency)}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={printReceipt}
+                className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white p-4 text-sm font-bold text-gray-900 transition hover:border-printa-red/40 hover:bg-printa-red/5 hover:text-printa-red"
+              >
+                <Printer size={22} className="mb-2" />
+                Print receipt
+              </button>
+              <button
+                type="button"
+                onClick={emailReceipt}
+                className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white p-4 text-sm font-bold text-gray-900 transition hover:border-printa-red/40 hover:bg-printa-red/5 hover:text-printa-red"
+              >
+                <Mail size={22} className="mb-2" />
+                Email receipt
+              </button>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setCompletedSale(null)}>
+                New sale
+              </Button>
+              <Button asChild className="flex-1 bg-printa-red text-white hover:bg-red-700">
+                <Link to={`/dashboard/job/${completedSale.order.id}`}>
+                  <ExternalLink size={16} className="mr-2" />
+                  View order
+                </Link>
+              </Button>
+            </div>
+          </div>
+        )}
+      </ResponsiveModal>
 
       {hasItems && !showMobileOrder && (
         <div className="lg:hidden fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">

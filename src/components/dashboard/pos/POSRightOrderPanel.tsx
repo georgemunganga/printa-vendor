@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatMoney } from "@/lib/money";
 
 type PaymentMethod = "cash" | "card" | "ewallet";
 
@@ -35,7 +36,7 @@ interface OrderSummaryProps {
   onUpdateQty: (id: string, delta: number) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
-  onCharge: () => void;
+  onCharge: () => Promise<boolean>;
   catMap: Record<string, ServiceCategoryLike>;
   paymentMethod: PaymentMethod;
   onPaymentMethodChange: (m: PaymentMethod) => void;
@@ -83,7 +84,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
   const canCompleteMobile = mobileNumber && mobileNumber.length >= 10;
   const selectedPaymentMethod = paymentMethods.find((method) => method.id === paymentMethod);
   const canProceedWithSelectedMethod = Boolean(selectedPaymentMethod?.enabled);
-  const placeOrderLabel = canProceedWithSelectedMethod ? `Place Order - K${total.toFixed(2)}` : `${selectedPaymentMethod?.label ?? "Payment Method"} Coming Soon`;
+  const placeOrderLabel = canProceedWithSelectedMethod ? `Place Order - ${formatMoney(total)}` : `${selectedPaymentMethod?.label ?? "Payment Method"} Coming Soon`;
 
   const resetPaymentForm = () => {
     setCashReceived("");
@@ -103,9 +104,13 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
     setIsProcessing(true);
     // Simulate payment processing
     await new Promise(resolve => setTimeout(resolve, 1500));
-    onCharge();
-    setShowPaymentModal(false);
-    resetPaymentForm();
+    const completed = await onCharge();
+    if (completed) {
+      setShowPaymentModal(false);
+      resetPaymentForm();
+    } else {
+      setIsProcessing(false);
+    }
   };
 
   const renderPaymentModal = () => (
@@ -128,7 +133,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
                 Bill Total
               </div>
               <div className="text-5xl font-bold mb-2">
-                K{total.toFixed(2)}
+                {formatMoney(total)}
               </div>
               <div className="text-sm opacity-80">
                 {itemCount} item{itemCount !== 1 ? 's' : ''}
@@ -161,7 +166,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
                   Change to Return
                 </div>
                 <div className="text-3xl font-bold text-green-700">
-                  K{change.toFixed(2)}
+                  {formatMoney(change)}
                 </div>
               </motion.div>
             )}
@@ -169,7 +174,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
             {cashReceived && parseFloat(cashReceived) < total && (
               <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 text-center">
                 <p className="text-sm font-semibold text-amber-700">
-                  Insufficient amount. Need K{(total - parseFloat(cashReceived)).toFixed(2)} more.
+                  Insufficient amount. Need {formatMoney(total - parseFloat(cashReceived))} more.
                 </p>
               </div>
             )}
@@ -184,7 +189,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
                 <CreditCard className="w-10 h-10" />
                 <div className="text-right">
                   <div className="text-sm opacity-80">Amount to Charge</div>
-                  <div className="text-3xl font-bold">K{total.toFixed(2)}</div>
+                  <div className="text-3xl font-bold">{formatMoney(total)}</div>
                 </div>
               </div>
             </div>
@@ -246,7 +251,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
                 <Smartphone className="w-10 h-10" />
                 <div className="text-right">
                   <div className="text-sm opacity-80">Amount to Charge</div>
-                  <div className="text-3xl font-bold">K{total.toFixed(2)}</div>
+                  <div className="text-3xl font-bold">{formatMoney(total)}</div>
                 </div>
               </div>
               <div className="text-sm opacity-90">
@@ -336,7 +341,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
                       <p className="text-xs text-gray-500 mt-0.5">x{line.qty}</p>
                     </div>
                     <p className="text-base font-semibold text-gray-900 whitespace-nowrap">
-                      K{(line.service.price * line.qty).toFixed(2)}
+                      {formatMoney(line.service.price * line.qty)}
                     </p>
                   </div>
                   <div className="mt-2 flex items-center justify-end gap-1.5">
@@ -380,15 +385,15 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
             <div className="space-y-1.5">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Subtotal</span>
-                <span className="font-medium text-gray-800">K{subtotal.toFixed(2)}</span>
+                <span className="font-medium text-gray-800">{formatMoney(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Tax (16%)</span>
-                <span className="font-medium text-gray-800">K{tax.toFixed(2)}</span>
+                <span className="font-medium text-gray-800">{formatMoney(tax)}</span>
               </div>
               <div className="pt-2 border-t border-dashed border-gray-300 flex justify-between text-2xl font-semibold">
                 <span className="text-gray-900">Total</span>
-                <span className="text-gray-900">K{total.toFixed(2)}</span>
+                <span className="text-gray-900">{formatMoney(total)}</span>
               </div>
             </div>
             <Button
@@ -468,7 +473,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
               </div>
 
               <p className="text-[11px] font-bold text-gray-800 whitespace-nowrap">
-                K{(line.service.price * line.qty).toFixed(2)}
+                {formatMoney(line.service.price * line.qty)}
               </p>
 
               <button
@@ -488,15 +493,15 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
           <div className="border-printa-red space-y-1">
             <div className="flex justify-between text-[11px]">
               <span className="text-gray-400">Subtotal</span>
-              <span className="text-gray-600 font-medium">K{subtotal.toFixed(2)}</span>
+              <span className="text-gray-600 font-medium">{formatMoney(subtotal)}</span>
             </div>
             <div className="flex justify-between text-[11px]">
               <span className="text-gray-400">Tax (16%)</span>
-              <span className="text-gray-600 font-medium">K{tax.toFixed(2)}</span>
+              <span className="text-gray-600 font-medium">{formatMoney(tax)}</span>
             </div>
             <div className="flex justify-between text-sm font-bold text-gray-900 pt-1.5 border-t border-dashed border-gray-200 mt-1.5">
               <span>Total</span>
-              <span>K{total.toFixed(2)}</span>
+              <span>{formatMoney(total)}</span>
             </div>
           </div>
 
