@@ -81,6 +81,9 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
   const canCompleteCash = parseFloat(cashReceived) >= total;
   const canCompleteCard = cardNumber && cardExpiry && cardCVV;
   const canCompleteMobile = mobileNumber && mobileNumber.length >= 10;
+  const selectedPaymentMethod = paymentMethods.find((method) => method.id === paymentMethod);
+  const canProceedWithSelectedMethod = Boolean(selectedPaymentMethod?.enabled);
+  const placeOrderLabel = canProceedWithSelectedMethod ? `Place Order - K${total.toFixed(2)}` : `${selectedPaymentMethod?.label ?? "Payment Method"} Coming Soon`;
 
   const resetPaymentForm = () => {
     setCashReceived("");
@@ -92,7 +95,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
   };
 
   const handleOpenPaymentModal = () => {
-    if (paymentMethod === "card") return;
+    if (!canProceedWithSelectedMethod) return;
     setShowPaymentModal(true);
   };
 
@@ -390,9 +393,10 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
             </div>
             <Button
               onClick={handleOpenPaymentModal}
-              className="w-full text-white text-base font-semibold"
+              disabled={!canProceedWithSelectedMethod}
+              className="w-full text-white text-base font-semibold disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Place Order
+              {placeOrderLabel}
             </Button>
           </div>
         )}
@@ -534,10 +538,10 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
 
           <Button
             onClick={handleOpenPaymentModal}
-            disabled={paymentMethod === "card"}
+            disabled={!canProceedWithSelectedMethod}
             className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {paymentMethod === "card" ? "Debit Card Coming Soon" : `Place Order - K${total.toFixed(2)}`}
+            {placeOrderLabel}
           </Button>
         </div>
       )}
