@@ -209,8 +209,33 @@ const SettingsPage = () => {
     }));
   };
 
+  const applyOperatingHoursPreset = (preset: "weekdays" | "all" | "clear") => {
+    setOperatingHours(WEEKDAYS.map((_, day) => {
+      if (preset === "clear") return { day_of_week: day, is_open: false };
+      const isOpen = preset === "all" || day < 5;
+      return isOpen
+        ? { day_of_week: day, is_open: true, opens_at: "08:00", closes_at: "17:00" }
+        : { day_of_week: day, is_open: false };
+    }));
+  };
+
+  const getOperatingHoursError = () => {
+    const invalid = operatingHours.find((hour) => hour.is_open && (!hour.opens_at || !hour.closes_at));
+    if (invalid) return `${WEEKDAYS[invalid.day_of_week]} needs both opening and closing times.`;
+
+    const sameTime = operatingHours.find((hour) => hour.is_open && hour.opens_at === hour.closes_at);
+    if (sameTime) return `${WEEKDAYS[sameTime.day_of_week]} opening and closing times cannot be the same.`;
+
+    return null;
+  };
+
   const saveOperatingHours = async () => {
-    if (!activeStore) return;
+    if (!activeStore || !canEditStoreSettings) return;
+    const validationError = getOperatingHoursError();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
     setIsSavingOperatingHours(true);
     try {
       await operatingHoursService.replace(activeStore.id, { hours: operatingHours });
@@ -478,15 +503,25 @@ const SettingsPage = () => {
           <div className="py-8 text-center text-sm text-gray-500">Loading operating hours…</div>
         ) : (
           <div className="space-y-3 py-2">
-            <p className="text-xs text-gray-500">Closed days are saved without opening or closing times. Overnight hours are not supported by this first contract.</p>
+            <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs leading-5 text-gray-500">Set the hours customers and staff see for this store. Closed days are saved without times.</p>
+              {canEditStoreSettings && (
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => applyOperatingHoursPreset("weekdays")} disabled={isSavingOperatingHours}>Weekdays 08:00–17:00</Button>
+                  <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => applyOperatingHoursPreset("all")} disabled={isSavingOperatingHours}>Open all days</Button>
+                  <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => applyOperatingHoursPreset("clear")} disabled={isSavingOperatingHours}>Clear</Button>
+                </div>
+              )}
+            </div>
             {operatingHours.map((hour) => (
-              <div key={hour.day_of_week} className="flex flex-col gap-3 rounded-xl border border-gray-200 p-3 sm:flex-row sm:items-center">
+              <div key={hour.day_of_week} className="flex flex-col gap-3 rounded-xl border border-gray-200 p-3 lg:flex-row lg:items-center">
                 <div className="flex min-w-28 items-center justify-between gap-3">
                   <span className="text-sm font-semibold text-gray-800">{WEEKDAYS[hour.day_of_week]}</span>
                   <button
                     type="button"
                     className={`rounded-full px-3 py-1 text-xs font-semibold ${hour.is_open ? "bg-red-50 text-printa-red" : "bg-gray-100 text-gray-500"}`}
-                    onClick={() => updateOperatingHour(hour.day_of_week, { is_open: !hour.is_open })}
+                    onClick={() => updateOperatingHour(hour.day_of_week, { is_open: !hour.is_open, opens_at: hour.opens_at || "08:00", closes_at: hour.closes_at || "17:00" })}
+                    disabled={!canEditStoreSettings || isSavingOperatingHours}
                   >
                     {hour.is_open ? "Open" : "Closed"}
                   </button>
@@ -499,6 +534,7 @@ const SettingsPage = () => {
                       value={hour.opens_at || ""}
                       onChange={(event) => updateOperatingHour(hour.day_of_week, { opens_at: event.target.value })}
                       className="h-10 flex-1 rounded-xl border border-gray-200 px-3 text-sm"
+                      disabled={!canEditStoreSettings || isSavingOperatingHours}
                     />
                     <span className="text-xs text-gray-400">to</span>
                     <input
@@ -507,6 +543,7 @@ const SettingsPage = () => {
                       value={hour.closes_at || ""}
                       onChange={(event) => updateOperatingHour(hour.day_of_week, { closes_at: event.target.value })}
                       className="h-10 flex-1 rounded-xl border border-gray-200 px-3 text-sm"
+                      disabled={!canEditStoreSettings || isSavingOperatingHours}
                     />
                   </div>
                 ) : (
@@ -514,11 +551,16 @@ const SettingsPage = () => {
                 )}
               </div>
             ))}
+            {!canEditStoreSettings && (
+              <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">You can view operating hours, but only the owner or an authorized manager can save changes.</p>
+            )}
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setActiveModal(null)} disabled={isSavingOperatingHours}>Cancel</Button>
-              <Button className="bg-printa-red hover:bg-printa-red/90" onClick={() => void saveOperatingHours()} disabled={isSavingOperatingHours}>
-                {isSavingOperatingHours ? "Saving…" : "Save hours"}
-              </Button>
+              <Button variant="outline" onClick={() => setActiveModal(null)} disabled={isSavingOperatingHours}>Close</Button>
+              {canEditStoreSettings && (
+                <Button className="bg-printa-red hover:bg-printa-red/90" onClick={() => void saveOperatingHours()} disabled={isSavingOperatingHours}>
+                  {isSavingOperatingHours ? "Saving…" : "Save hours"}
+                </Button>
+              )}
             </div>
           </div>
         )}

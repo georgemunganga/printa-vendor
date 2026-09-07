@@ -32,7 +32,7 @@ export function ResponsiveModal({
   if (!isMobile) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className={cn("sm:max-w-md", className)}>
+        <DialogContent className={cn("sm:max-w-2xl lg:max-w-3xl", className)}>
           {(title || description) && (
             <DialogHeader>
               {title && <DialogTitle>{title}</DialogTitle>}
