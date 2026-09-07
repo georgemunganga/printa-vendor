@@ -17,6 +17,16 @@ export default defineConfig(({ mode }) => ({
             changeOrigin: true,
             secure: true,
           },
+          "/healthz": {
+            target: "https://api.printa.co.zm",
+            changeOrigin: true,
+            secure: true,
+          },
+          "/readyz": {
+            target: "https://api.printa.co.zm",
+            changeOrigin: true,
+            secure: true,
+          },
         }
       : undefined,
   },
@@ -71,7 +81,7 @@ export default defineConfig(({ mode }) => ({
   ].filter(Boolean),
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
 }));

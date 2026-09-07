@@ -39,6 +39,14 @@ const splitName = (email?: string) => {
   return label || "Printa User";
 };
 
+const loadAuthenticatedUser = async (userId?: string) => {
+  try {
+    return await usersService.me();
+  } catch {
+    return userId ? usersService.get(userId).catch(() => null) : null;
+  }
+};
+
 export const buildAuthUserFromApiToken = async (token: string): Promise<AuthUser> => {
   const claims = decodeJwtPayload(token);
   const role = mapApiRole(claims.role);
@@ -46,7 +54,7 @@ export const buildAuthUserFromApiToken = async (token: string): Promise<AuthUser
 
   try {
     const [user, vendor] = await Promise.all([
-      claims.user_id ? usersService.get(claims.user_id) : Promise.resolve(null),
+      loadAuthenticatedUser(claims.user_id),
       claims.role?.toUpperCase() === "VENDOR"
         ? vendorService.getProfile().catch(() => null)
         : Promise.resolve(null),

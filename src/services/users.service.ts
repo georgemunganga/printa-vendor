@@ -15,6 +15,10 @@ export const usersService = {
     return api.get<UserDto>(`/api/v1/users/${id}`);
   },
 
+  me() {
+    return api.get<UserDto>("/api/v1/users/me");
+  },
+
   updateMyProfile(payload: { first_name: string; last_name: string; phone?: string }) {
     return api.patch<UserDto>("/api/v1/users/me", payload);
   },
