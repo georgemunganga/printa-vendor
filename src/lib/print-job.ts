@@ -52,6 +52,34 @@ export const getSlaLabel = (job: PrintJob) => {
   return `${diff >= 0 ? "Due in" : "Overdue"} ${formatJobDuration(diff)}`;
 };
 
+const readStringField = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+const getOrderFileUrl = (order: OrderDto): string | undefined => {
+  const metadata = order.metadata ?? {};
+  const metadataFile = readStringField(metadata.file_url)
+    ?? readStringField(metadata.fileUrl)
+    ?? readStringField(metadata.asset_url)
+    ?? readStringField(metadata.assetUrl)
+    ?? readStringField(metadata.preview_url)
+    ?? readStringField(metadata.previewUrl);
+
+  if (metadataFile) return metadataFile;
+
+  for (const item of order.items ?? []) {
+    const customisation = item.customisation ?? {};
+    const itemFile = readStringField(customisation.file_url)
+      ?? readStringField(customisation.fileUrl)
+      ?? readStringField(customisation.asset_url)
+      ?? readStringField(customisation.assetUrl)
+      ?? readStringField(customisation.preview_url)
+      ?? readStringField(customisation.previewUrl);
+    if (itemFile) return itemFile;
+  }
+
+  return undefined;
+};
+
 export const mapOrderToPrintJob = (
   order: OrderDto,
   productByStoreProductId?: StoreProductDisplayMap,
@@ -79,6 +107,7 @@ export const mapOrderToPrintJob = (
     customerName,
     deliveryType: order.delivery_address ? "rider" : "pickup",
     orderChannel: order.channel === "POS" ? "walk-in" : "online",
+    fileUrl: getOrderFileUrl(order),
     notes: order.notes,
     backendStatus: order.status,
     orderKind,

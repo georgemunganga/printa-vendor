@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { Inbox, Layers, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { PrintJob, PrintJobStatus } from "@/types";
@@ -27,6 +28,7 @@ const addHistory = (job: PrintJob, status: PrintJobStatus) => {
 
 const DashboardV2: React.FC = () => {
   const { activeStore } = useStore();
+  const navigate = useNavigate();
 
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [isOnline, setIsOnline] = useState(true);
@@ -222,9 +224,9 @@ const DashboardV2: React.FC = () => {
     toast.success("Rider notified — ETA 8 min");
   }, []);
 
-  const handlePreview = useCallback((_id: string) => {
-    toast("Preview opening...", { description: "File preview not yet connected" });
-  }, []);
+  const handlePreview = useCallback((id: string) => {
+    navigate(`/dashboard/job/${id}`);
+  }, [navigate]);
 
   // ── Filtering ──
   const applyStatusFilter = useCallback(
