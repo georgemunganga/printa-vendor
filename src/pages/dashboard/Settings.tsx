@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Bell, Lock, Shield, DollarSign, Smartphone, Check, Clock, LogOut, Store, Package } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Bell, Lock, Shield, DollarSign, Smartphone, Check, Clock, LogOut, Store, Package, Building2, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -8,9 +8,10 @@ import { useAuth } from "@/context/auth-context";
 import { useStore } from "@/context/store-context";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { operatingHoursService } from "@/services/operating-hours.service";
-import type { OperatingHourDto } from "@/services/contracts";
+import type { OperatingHourDto, StoreDto } from "@/services/contracts";
 
 interface SettingCard {
   title: string;
@@ -20,22 +21,134 @@ interface SettingCard {
   action?: () => void;
 }
 
-type ModalType = "security" | "notifications" | "privacy" | "currency" | "hours" | "download" | null;
+type ModalType = "store" | "security" | "notifications" | "privacy" | "currency" | "hours" | "download" | null;
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 const createEmptyOperatingHours = (): OperatingHourDto[] =>
   WEEKDAYS.map((_, day) => ({ day_of_week: day, is_open: false }));
 
+interface StoreSettingsForm {
+  name: string;
+  description: string;
+  address: string;
+  city: string;
+  country: string;
+  phone: string;
+  email: string;
+}
+
+const emptyStoreForm: StoreSettingsForm = {
+  name: "",
+  description: "",
+  address: "",
+  city: "",
+  country: "Zambia",
+  phone: "",
+  email: "",
+};
+
+const toStoreForm = (store: StoreDto): StoreSettingsForm => ({
+  name: store.name ?? "",
+  description: store.description ?? "",
+  address: store.address ?? "",
+  city: store.city ?? "",
+  country: store.country ?? "Zambia",
+  phone: store.phone ?? "",
+  email: store.email ?? "",
+});
+
 const SettingsPage = () => {
   const { selectedCurrency, availableCurrencies } = useCurrencyContext();
-  const { logout } = useAuth();
-  const { activeStore, setActiveStore } = useStore();
+  const { logout, can, isOwner } = useAuth();
+  const { activeStore, setActiveStore, refreshStores } = useStore();
   const navigate = useNavigate();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [storeForm, setStoreForm] = useState<StoreSettingsForm>(emptyStoreForm);
+  const [storeDetails, setStoreDetails] = useState<StoreDto | null>(null);
+  const [isLoadingStore, setIsLoadingStore] = useState(false);
+  const [isSavingStore, setIsSavingStore] = useState(false);
   const [operatingHours, setOperatingHours] = useState<OperatingHourDto[]>(createEmptyOperatingHours);
   const [isLoadingOperatingHours, setIsLoadingOperatingHours] = useState(false);
   const [isSavingOperatingHours, setIsSavingOperatingHours] = useState(false);
+  const canEditStoreSettings = isOwner() || can("edit_store_settings");
+
+  useEffect(() => {
+    if (!activeStore?.id) {
+      setStoreDetails(null);
+      setStoreForm(emptyStoreForm);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingStore(true);
+    void inventoryService.getStore(activeStore.id)
+      .then((store) => {
+        if (cancelled) return;
+        setStoreDetails(store);
+        setStoreForm(toStoreForm(store));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStoreDetails(null);
+        setStoreForm({
+          ...emptyStoreForm,
+          name: activeStore.name,
+          address: activeStore.address,
+          phone: activeStore.phone,
+          email: activeStore.email ?? "",
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingStore(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStore?.id, activeStore?.name, activeStore?.address, activeStore?.phone, activeStore?.email]);
+
+  const openStoreSettings = () => {
+    if (!activeStore) {
+      toast.error("Select a store before managing store profile.");
+      return;
+    }
+    setActiveModal("store");
+  };
+
+  const updateStoreForm = (field: keyof StoreSettingsForm, value: string) => {
+    setStoreForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const saveStoreProfile = async () => {
+    if (!activeStore || !canEditStoreSettings) return;
+    if (!storeForm.name.trim() || !storeForm.address.trim() || !storeForm.city.trim() || !storeForm.country.trim()) {
+      toast.error("Store name, address, city, and country are required.");
+      return;
+    }
+
+    setIsSavingStore(true);
+    try {
+      const updated = await inventoryService.updateStore(activeStore.id, {
+        name: storeForm.name.trim(),
+        description: storeForm.description.trim(),
+        address: storeForm.address.trim(),
+        city: storeForm.city.trim(),
+        country: storeForm.country.trim(),
+        phone: storeForm.phone.trim(),
+        email: storeForm.email.trim(),
+      });
+      setStoreDetails(updated);
+      setStoreForm(toStoreForm(updated));
+      await refreshStores();
+      toast.success("Store profile saved.");
+      setActiveModal(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save store profile.");
+    } finally {
+      setIsSavingStore(false);
+    }
+  };
 
   const coreSettings = useMemo<SettingCard[]>(
     () => [
@@ -130,6 +243,31 @@ const SettingsPage = () => {
         </div>
 
         <div className="space-y-4">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="rounded-2xl bg-printa-red/10 p-3 text-printa-red">
+                  <Building2 size={18} className="text-printa-red" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Store Profile</p>
+                  <p className="text-sm text-gray-500">Set the public store identity used on POS, receipts, orders, and customer pages.</p>
+                  <div className="mt-3 grid gap-2 text-xs text-gray-500 sm:grid-cols-2">
+                    <span className="font-semibold text-gray-800">{storeDetails?.name ?? activeStore?.name ?? "No store selected"}</span>
+                    <span>{storeDetails?.phone || activeStore?.phone || "No phone set"}</span>
+                    <span className="sm:col-span-2 flex items-start gap-1.5"><MapPin size={13} className="mt-0.5 shrink-0 text-gray-400" />{storeDetails ? [storeDetails.address, storeDetails.city, storeDetails.country].filter(Boolean).join(", ") || "No address set" : activeStore?.address ?? "No address set"}</span>
+                  </div>
+                </div>
+              </div>
+              <Button variant="ghost" className="text-sm font-semibold text-printa-red" onClick={openStoreSettings} disabled={!activeStore}>
+                {canEditStoreSettings ? "Manage" : "View"}
+              </Button>
+            </div>
+            {!canEditStoreSettings && activeStore && (
+              <p className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">Only the store owner or a manager with store-settings permission can change this profile.</p>
+            )}
+          </div>
+
           {settings.map((setting) => (
             <div
               key={setting.title}
@@ -214,17 +352,9 @@ const SettingsPage = () => {
             </Button>
           </div>
 
-          <div
-              
-              className={`flex flex-col rounded-2xl border p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between bg-printa-red text-white border-0"
-                 
-              }`}
-            >
+          <div className="flex flex-col rounded-2xl border-0 bg-printa-red p-5 text-white shadow-sm sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-4">
-                <div
-                  className={`rounded-2xl p-3 bg-white/30 text-printa-white"
-                  }`}
-                >
+                <div className="rounded-2xl bg-white/30 p-3 text-white">
                   <Smartphone size={18} className="text-white" />
                 </div>
                 <div>
@@ -270,6 +400,66 @@ const SettingsPage = () => {
           </Button>
         </div>
       </div>
+
+      <ResponsiveModal
+        open={activeModal === "store"}
+        onOpenChange={(open) => !open && setActiveModal(null)}
+        title={
+          <span className="flex items-center gap-2">
+            <Building2 size={20} className="text-printa-red" />
+            Store Profile
+          </span>
+        }
+        description={activeStore ? `Public details for ${activeStore.name}.` : "Select a store to manage its profile."}
+      >
+        {isLoadingStore ? (
+          <div className="py-8 text-center text-sm text-gray-500">Loading store profile...</div>
+        ) : (
+          <div className="space-y-4 py-2">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label htmlFor="store-name">Store name *</Label>
+                <Input id="store-name" value={storeForm.name} onChange={(event) => updateStoreForm("name", event.target.value)} disabled={!canEditStoreSettings || isSavingStore} className="mt-1" />
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="store-description">Store description</Label>
+                <Textarea id="store-description" value={storeForm.description} onChange={(event) => updateStoreForm("description", event.target.value)} disabled={!canEditStoreSettings || isSavingStore} placeholder="Short description customers and staff can recognize." className="mt-1" />
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="store-address">Street address *</Label>
+                <Input id="store-address" value={storeForm.address} onChange={(event) => updateStoreForm("address", event.target.value)} disabled={!canEditStoreSettings || isSavingStore} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="store-city">City *</Label>
+                <Input id="store-city" value={storeForm.city} onChange={(event) => updateStoreForm("city", event.target.value)} disabled={!canEditStoreSettings || isSavingStore} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="store-country">Country *</Label>
+                <Input id="store-country" value={storeForm.country} onChange={(event) => updateStoreForm("country", event.target.value)} disabled={!canEditStoreSettings || isSavingStore} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="store-phone">Phone</Label>
+                <Input id="store-phone" value={storeForm.phone} onChange={(event) => updateStoreForm("phone", event.target.value)} disabled={!canEditStoreSettings || isSavingStore} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="store-email">Email</Label>
+                <Input id="store-email" type="email" value={storeForm.email} onChange={(event) => updateStoreForm("email", event.target.value)} disabled={!canEditStoreSettings || isSavingStore} className="mt-1" />
+              </div>
+            </div>
+            {!canEditStoreSettings && (
+              <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">You can view this profile, but only the owner or an allowed manager can save changes.</p>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setActiveModal(null)} disabled={isSavingStore}>Close</Button>
+              {canEditStoreSettings && (
+                <Button className="bg-printa-red hover:bg-printa-red/90" onClick={() => void saveStoreProfile()} disabled={isSavingStore || !activeStore}>
+                  {isSavingStore ? "Saving..." : "Save Profile"}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </ResponsiveModal>
 
       <ResponsiveModal
         open={activeModal === "hours"}
