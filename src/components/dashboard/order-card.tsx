@@ -1,45 +1,15 @@
 import React from "react";
-import { CheckCircle, Clock, FileText, Truck, XCircle, ChevronRight, Navigation, MessageCircle } from "lucide-react";
+import { ChevronRight, Navigation, MessageCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { PrintJob } from "@/types";
-import { formatMoney } from "@/lib/money";
+import { OrderMoney, OrderStatusBadge } from "@/components/dashboard/order";
 
 interface OrderCardProps {
   order: PrintJob;
 }
 
-const statusConfig = {
-  pending: {
-    label: "Processing",
-    icon: Clock,
-    badge: "bg-amber-100 text-amber-700",
-  },
-  printing: {
-    label: "Printing",
-    icon: FileText,
-    badge: "bg-blue-100 text-blue-700",
-  },
-  ready: {
-    label: "Ready",
-    icon: CheckCircle,
-    badge: "bg-emerald-100 text-emerald-700",
-  },
-  delivered: {
-    label: "Delivered",
-    icon: Truck,
-    badge: "bg-gray-100 text-gray-700",
-  },
-  cancelled: {
-    label: "Cancelled",
-    icon: XCircle,
-    badge: "bg-rose-100 text-rose-700",
-  },
-};
-
 export const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
   const navigate = useNavigate();
-  const status = statusConfig[order.status] ?? statusConfig.pending;
-  const StatusIcon = status.icon;
   const canTrack = order.status === "printing" || order.status === "ready";
 
   const handleTrackClick = (e: React.MouseEvent) => {
@@ -62,13 +32,8 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
       <div className="p-4">
         {/* Top: Status + Price */}
         <div className="flex items-center justify-between mb-3">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${status.badge}`}>
-            <StatusIcon size={14} />
-            {status.label}
-          </span>
-          <span className="text-lg font-bold text-gray-900">
-            {formatMoney(order.totalPrice, order.currency)}
-          </span>
+          <OrderStatusBadge status={order.status} withIcon className="py-1.5" />
+          <OrderMoney amount={order.totalPrice} currency={order.currency} className="text-lg font-bold text-gray-900" />
         </div>
 
         {/* Middle: File name + details */}

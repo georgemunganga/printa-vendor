@@ -16,7 +16,8 @@ import { useStore } from "@/context/store-context";
 import { useAuth } from "@/context/auth-context";
 import { buildStoreProductDisplayMap } from "@/lib/order-display";
 import { formatMoney } from "@/lib/money";
-import { mapOrderToPrintJob } from "@/lib/print-job";
+import { getOrderChannelLabel, getOrderKindLabel, mapOrderToPrintJob } from "@/lib/print-job";
+import { OrderMoney, OrderStatusBadge } from "@/components/dashboard/order";
 
 interface Attachment {
   id: string;
@@ -196,21 +197,6 @@ const ChatListPanel: React.FC<{
 const OrderContextCard: React.FC<{ order: PrintJob }> = ({ order }) => {
   const isPrintJob = order.orderKind !== "retail_sale";
   const ContextIcon = isPrintJob ? FileText : Store;
-  const statusColors: Record<string, string> = {
-    pending: "bg-amber-100 text-amber-700",
-    printing: "bg-blue-100 text-blue-700",
-    ready: "bg-emerald-100 text-emerald-700",
-    delivered: "bg-gray-100 text-gray-700",
-    cancelled: "bg-rose-100 text-rose-700",
-  };
-
-  const statusLabels: Record<string, string> = {
-    pending: "Processing",
-    printing: "Printing",
-    ready: "Ready",
-    delivered: "Delivered",
-    cancelled: "Cancelled",
-  };
 
   return (
     <div className="mx-4 mb-6">
@@ -240,8 +226,8 @@ const OrderContextCard: React.FC<{ order: PrintJob }> = ({ order }) => {
         </p>
 
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
-          <div>Type: <span className="font-semibold text-gray-700">{isPrintJob ? "Print job" : "Till sale"}</span></div>
-          <div>Channel: <span className="font-semibold text-gray-700">{order.orderChannel === "walk-in" ? "Walk-in" : "Online"}</span></div>
+          <div>Type: <span className="font-semibold text-gray-700">{getOrderKindLabel(order.orderKind)}</span></div>
+          <div>Channel: <span className="font-semibold text-gray-700">{getOrderChannelLabel(order.orderChannel)}</span></div>
           <div>Fulfilment: <span className="font-semibold text-gray-700">{order.deliveryType === "rider" ? "Delivery" : "Pickup"}</span></div>
           <div>Updated: <span className="font-semibold text-gray-700">{formatRelativeTime(order.lastUpdated ?? order.createdAt)}</span></div>
         </div>
@@ -249,11 +235,9 @@ const OrderContextCard: React.FC<{ order: PrintJob }> = ({ order }) => {
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-gray-400">{order.id}</span>
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColors[order.status] || statusColors.pending}`}>
-              {statusLabels[order.status] || "Processing"}
-            </span>
+            <OrderStatusBadge status={order.status} compact />
           </div>
-          <span className="text-sm font-bold text-gray-900">{formatMoney(order.totalPrice, order.currency)}</span>
+          <OrderMoney amount={order.totalPrice} currency={order.currency} className="text-sm font-bold text-gray-900" />
         </div>
       </div>
       <p className="text-center text-xs text-gray-400 mt-3">

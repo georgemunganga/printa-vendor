@@ -1,17 +1,13 @@
 import React, { useEffect, useRef, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  CheckCircle,
   ChevronRight,
-  Clock,
   FileText,
   Globe,
   Package,
   Search,
   Store,
-  Truck,
   X,
-  XCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -24,20 +20,12 @@ import { ordersService } from "@/services/orders.service";
 import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
 import { buildStoreProductDisplayMap } from "@/lib/order-display";
-import { getOrderChannelLabel, getOrderKindLabel, mapOrderToPrintJob } from "@/lib/print-job";
-import { formatMoney } from "@/lib/money";
+import { mapOrderToPrintJob } from "@/lib/print-job";
+import { OrderChannelBadge, OrderKindBadge, OrderMoney, OrderStatusBadge } from "@/components/dashboard/order";
 
 /* ─── Channel filter ─── */
 type ChannelFilter = "all" | "online" | "walk-in";
 type StatusFilter = "all" | "pending" | "printing" | "ready" | "delivered" | "cancelled";
-
-const statusConfig: Record<string, { label: string; icon: React.ElementType; dot: string; badge: string }> = {
-  pending: { label: "Processing", icon: Clock, dot: "bg-amber-400", badge: "bg-amber-50 text-amber-700" },
-  printing: { label: "Printing", icon: FileText, dot: "bg-blue-400", badge: "bg-blue-50 text-blue-700" },
-  ready: { label: "Ready", icon: CheckCircle, dot: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-700" },
-  delivered: { label: "Delivered", icon: Truck, dot: "bg-gray-400", badge: "bg-gray-100 text-gray-600" },
-  cancelled: { label: "Cancelled", icon: XCircle, dot: "bg-rose-400", badge: "bg-rose-50 text-rose-600" },
-};
 
 const statusFilters: { key: StatusFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -52,10 +40,7 @@ const formatDate = (date: Date) =>
 
 /* ─── Order Card ─── */
 const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
-  const config = statusConfig[order.status] ?? statusConfig.pending;
-  const isOnline = order.orderChannel === "online" || !order.orderChannel;
   const isPrintJob = order.orderKind !== "retail_sale";
-  const KindIcon = isPrintJob ? FileText : Store;
 
   return (
     <Link
@@ -65,23 +50,10 @@ const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
       {/* Top row: channel badge + status */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-1.5">
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-            isOnline ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"
-          }`}>
-            {isOnline ? <Globe size={10} /> : <Store size={10} />}
-            {getOrderChannelLabel(order.orderChannel)}
-          </span>
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-            isPrintJob ? "bg-red-50 text-printa-red" : "bg-gray-100 text-gray-600"
-          }`}>
-            <KindIcon size={10} />
-            {getOrderKindLabel(order.orderKind)}
-          </span>
+          <OrderChannelBadge orderChannel={order.orderChannel} compact />
+          <OrderKindBadge orderKind={order.orderKind} compact />
         </div>
-        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ${config.badge}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
-          {config.label}
-        </span>
+        <OrderStatusBadge status={order.status} compact withDot />
       </div>
 
       {/* File name */}
@@ -103,7 +75,7 @@ const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
 
       {/* Bottom row: price + date + chevron */}
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-        <span className="text-sm font-bold text-gray-900">{formatMoney(order.totalPrice, order.currency)}</span>
+        <OrderMoney amount={order.totalPrice} currency={order.currency} className="text-sm font-bold text-gray-900" />
         <div className="flex items-center gap-1.5 text-xs text-gray-400">
           <span>{formatDate(order.createdAt)}</span>
           <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-400 transition" />
@@ -279,7 +251,6 @@ const OrderHistoryPage: React.FC = () => {
         {statusFilters.map((f) => {
           const count = getStatusCount(f.key);
           const isActive = statusFilter === f.key;
-          const config = f.key !== "all" ? statusConfig[f.key] : null;
           return (
             <button
               key={f.key}
@@ -291,8 +262,8 @@ const OrderHistoryPage: React.FC = () => {
                   : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
               }`}
             >
-              {config && (
-                <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-white/60" : config.dot}`} />
+              {f.key !== "all" && (
+                <OrderStatusBadge status={f.key} compact withDot showLabel={false} className={isActive ? "bg-transparent px-0 py-0 text-white" : "bg-transparent px-0 py-0"} />
               )}
               {f.label}
               <span className={`text-[10px] ${isActive ? "text-white/50" : "text-gray-400"}`}>

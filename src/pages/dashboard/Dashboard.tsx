@@ -15,16 +15,9 @@ import { ordersService } from "@/services/orders.service";
 import type { PrintJob } from "@/types";
 import { formatMoney } from "@/lib/money";
 import { mapOrderToPrintJob } from "@/lib/print-job";
+import { OrderMoney, OrderStatusBadge } from "@/components/dashboard/order";
 
 type DashboardOrder = PrintJob;
-
-const statusMeta: Record<DashboardOrder["status"], { label: string; accent: string }> = {
-  pending: { label: "Processing", accent: "text-amber-600 bg-amber-100" },
-  printing: { label: "Printing", accent: "text-sky-600 bg-sky-100" },
-  ready: { label: "Ready to Dispatch", accent: "text-emerald-600 bg-emerald-100" },
-  delivered: { label: "Delivered", accent: "text-gray-600 bg-gray-100" },
-  cancelled: { label: "Cancelled", accent: "text-rose-600 bg-rose-100" },
-};
 
 const capabilityTiles = [
   "Small-format (A4/A5)",
@@ -173,7 +166,6 @@ const Dashboard = () => {
                 </div>
               ) : (
                 orders.map((order) => {
-                  const status = statusMeta[order.status] ?? statusMeta.pending;
                   return (
                     <motion.div
                       key={order.id}
@@ -183,12 +175,8 @@ const Dashboard = () => {
                       className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
                     >
                       <div className="flex items-center justify-between">
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${status.accent}`}>
-                          {status.label}
-                        </span>
-                        <span className="text-sm font-semibold text-gray-900">
-                          {formatMoney(order.totalPrice, order.currency)}
-                        </span>
+                        <OrderStatusBadge status={order.status} label={order.status === "ready" ? "Ready to Dispatch" : undefined} />
+                        <OrderMoney amount={order.totalPrice} currency={order.currency} className="text-sm font-semibold text-gray-900" />
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-500">
                         <FileText size={16} className="text-gray-300" />
