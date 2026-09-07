@@ -44,6 +44,7 @@ const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
     fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status,
     totalPrice: order.total,
+    currency: order.currency,
     pageCount: copies,
     copies,
     colorMode: "color",

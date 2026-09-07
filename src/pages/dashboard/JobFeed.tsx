@@ -73,6 +73,7 @@ const toPrintJob = (order: OrderDto): PrintJob => {
     fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status: toPrintJobStatus(order.status),
     totalPrice: order.total,
+    currency: order.currency,
     pageCount: itemCount,
     copies: itemCount,
     colorMode: "color",

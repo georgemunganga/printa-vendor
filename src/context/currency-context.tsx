@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 
 export interface CurrencyOption {
   code: string;
@@ -8,6 +9,7 @@ export interface CurrencyOption {
 }
 
 const CURRENCY_OPTIONS: CurrencyOption[] = [
+  { code: DEFAULT_CURRENCY, name: "Zambian Kwacha", symbol: "K", locale: "en-ZM" },
   { code: "KES", name: "Kenyan Shilling", symbol: "KES", locale: "en-KE" },
   { code: "USD", name: "US Dollar", symbol: "USD", locale: "en-US" },
   { code: "EUR", name: "Euro", symbol: "EUR", locale: "en-EU" },
@@ -17,6 +19,7 @@ interface CurrencyContextValue {
   selectedCurrency: CurrencyOption;
   availableCurrencies: CurrencyOption[];
   setSelectedCurrency: (currency: CurrencyOption) => void;
+  formatCurrency: (amount: number, currency?: string) => string;
 }
 
 const CurrencyContext = createContext<CurrencyContextValue | undefined>(undefined);
@@ -29,6 +32,7 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
       selectedCurrency,
       availableCurrencies: CURRENCY_OPTIONS,
       setSelectedCurrency,
+      formatCurrency: (amount: number, currency?: string) => formatMoney(amount, currency ?? selectedCurrency.code),
     }),
     [selectedCurrency]
   );

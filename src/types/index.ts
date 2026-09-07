@@ -13,6 +13,7 @@ export interface PrintJob {
   fileName: string;
   status: PrintJobStatus;
   totalPrice: number;
+  currency?: string;
   pageCount: number;
   copies: number;
   colorMode: "color" | "bw";

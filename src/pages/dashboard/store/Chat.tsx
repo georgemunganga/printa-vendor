@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Check, CheckCheck, MessageCircle, FileText, ExternalLink, Paperclip, X, File } from "lucide-react";
+import { Send, Check, CheckCheck, MessageCircle, FileText, ExternalLink, Paperclip, X, File, Store } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { PrintJob, PrintJobStatus } from "@/types";
@@ -13,6 +13,8 @@ import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import { BackButton } from "@/components/dashboard/BackButton";
 import { useStore } from "@/context/store-context";
 import { useAuth } from "@/context/auth-context";
+import { getOrderKind } from "@/lib/order-kind";
+import { formatMoney } from "@/lib/money";
 
 interface Attachment {
   id: string;
@@ -65,12 +67,14 @@ const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
   const items = order.items ?? [];
   const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
   const customerName = order.customer_id ? `Customer ${order.customer_id.slice(0, 8)}` : "Walk-in customer";
+  const orderKind = getOrderKind(order);
 
   return {
     id: order.id,
-    fileName: order.order_number,
+    fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status: toPrintJobStatus(order.status),
     totalPrice: order.total,
+    currency: order.currency,
     pageCount: copies,
     copies,
     colorMode: "color",
@@ -81,6 +85,8 @@ const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
     deliveryType: order.delivery_address ? "rider" : "pickup",
     orderChannel: order.channel === "POS" ? "walk-in" : "online",
     notes: order.notes,
+    backendStatus: order.status,
+    orderKind,
     statusHistory: [{ status: toPrintJobStatus(order.status), timestamp: new Date(order.updated_at) }],
   };
 };
@@ -88,17 +94,22 @@ const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
 const getOrderThreads = (orders: PrintJob[]): ChatThread[] =>
   orders
     .filter((order) => order.status !== "cancelled")
-    .map((order) => ({
+    .map((order) => {
+      const isPrintJob = order.orderKind !== "retail_sale";
+      return {
       order,
       lastMessage:
-        order.status === "ready"
-          ? "Order status: Ready for pickup"
+        !isPrintJob
+          ? "Till sale context"
+          : order.status === "ready"
+          ? "Print job status: Ready for pickup"
           : order.status === "printing"
-          ? "Order status: In production"
-          : "Order status: Received",
+          ? "Print job status: In production"
+          : "Print job status: Received",
       lastMessageTime: order.lastUpdated ?? order.createdAt,
       unreadCount: 0,
-    }))
+    };
+    })
     .sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
 
 const mapConversationMessage = async (message: ConversationMessageDto, currentUserID?: string): Promise<ChatMessage> => {
@@ -225,6 +236,8 @@ const ChatListPanel: React.FC<{
 
 // Order Context Card Component
 const OrderContextCard: React.FC<{ order: PrintJob }> = ({ order }) => {
+  const isPrintJob = order.orderKind !== "retail_sale";
+  const ContextIcon = isPrintJob ? FileText : Store;
   const statusColors: Record<string, string> = {
     pending: "bg-amber-100 text-amber-700",
     printing: "bg-blue-100 text-blue-700",
@@ -246,7 +259,7 @@ const OrderContextCard: React.FC<{ order: PrintJob }> = ({ order }) => {
       <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center">
-            <FileText size={16} className="text-gray-600" />
+            <ContextIcon size={16} className="text-gray-600" />
           </div>
           <div className="flex-1">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -254,7 +267,7 @@ const OrderContextCard: React.FC<{ order: PrintJob }> = ({ order }) => {
             </p>
           </div>
           <Link
-            to={`/dashboard/order/${order.id}`}
+            to={`/dashboard/job/${order.id}`}
             className="p-1.5 rounded-xl hover:bg-gray-100 transition-colors"
           >
             <ExternalLink size={14} className="text-gray-400" />
@@ -263,8 +276,17 @@ const OrderContextCard: React.FC<{ order: PrintJob }> = ({ order }) => {
 
         <h3 className="font-semibold text-gray-900 truncate">{order.fileName}</h3>
         <p className="text-sm text-gray-500 mt-1">
-          {order.pageCount} pages · {order.copies} {order.copies === 1 ? "copy" : "copies"} · {order.colorMode === "color" ? "Color" : "B&W"}
+          {isPrintJob
+            ? `${order.pageCount} pages · ${order.copies} ${order.copies === 1 ? "copy" : "copies"} · ${order.colorMode === "color" ? "Color" : "B&W"}`
+            : `${order.copies} ${order.copies === 1 ? "item" : "items"} · POS till sale`}
         </p>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
+          <div>Type: <span className="font-semibold text-gray-700">{isPrintJob ? "Print job" : "Till sale"}</span></div>
+          <div>Channel: <span className="font-semibold text-gray-700">{order.orderChannel === "walk-in" ? "Walk-in" : "Online"}</span></div>
+          <div>Fulfilment: <span className="font-semibold text-gray-700">{order.deliveryType === "rider" ? "Delivery" : "Pickup"}</span></div>
+          <div>Updated: <span className="font-semibold text-gray-700">{formatRelativeTime(order.lastUpdated ?? order.createdAt)}</span></div>
+        </div>
 
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
           <div className="flex items-center gap-2">
@@ -273,11 +295,11 @@ const OrderContextCard: React.FC<{ order: PrintJob }> = ({ order }) => {
               {statusLabels[order.status] || "Processing"}
             </span>
           </div>
-          <span className="text-sm font-bold text-gray-900">${order.totalPrice.toFixed(2)}</span>
+          <span className="text-sm font-bold text-gray-900">{formatMoney(order.totalPrice, order.currency)}</span>
         </div>
       </div>
       <p className="text-center text-xs text-gray-400 mt-3">
-        Conversation about this order
+        {isPrintJob ? "Conversation about this print job" : "Conversation about this till sale"}
       </p>
     </div>
   );
@@ -385,7 +407,7 @@ const ChatView: React.FC<{
             {order.printer.name}
           </h1>
           <p className="text-xs text-gray-500 truncate">
-            {order.id} · {order.fileName}
+            {order.fileName} · {formatMoney(order.totalPrice, order.currency)}
           </p>
         </div>
       </header>
