@@ -36,6 +36,7 @@ export interface PrintJob {
   customerPhone?: string;
   customerEmail?: string;
   notes?: string;
+  backendStatus?: string;
 }
 
 // ========== Role & Permission System ==========

@@ -59,6 +59,8 @@ export const ActiveJobCard: React.FC<ActiveJobCardProps> = ({
 }) => {
   const stage = stageConfig[job.status] || stageConfig.printing;
   const progress = getProgress(job);
+  const canStartPrint = job.backendStatus === "CONFIRMED";
+  const canMarkReady = job.backendStatus === "IN_PRODUCTION";
 
   return (
     <motion.div
@@ -147,7 +149,7 @@ export const ActiveJobCard: React.FC<ActiveJobCardProps> = ({
 
       {/* Actions */}
       <div className="flex items-center gap-2 border-t border-gray-100 pt-3">
-        {job.status === "printing" && !job.productionStartedAt && (
+        {job.status === "printing" && canStartPrint && (
           <button
             onClick={() => onStartPrint(job.id)}
             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-amber-500 hover:bg-amber-400 transition-colors active:scale-[0.97]"
@@ -156,7 +158,7 @@ export const ActiveJobCard: React.FC<ActiveJobCardProps> = ({
             Start Print
           </button>
         )}
-        {job.status === "printing" && (
+        {job.status === "printing" && canMarkReady && (
           <button
             onClick={() => onMarkReady(job.id)}
             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 transition-colors active:scale-[0.97]"

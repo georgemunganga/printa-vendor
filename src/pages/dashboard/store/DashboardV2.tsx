@@ -54,6 +54,7 @@ const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
     deliveryType: order.delivery_address ? "rider" : "pickup",
     orderChannel: order.channel === "POS" ? "walk-in" : "online",
     notes: order.notes,
+    backendStatus: order.status,
     statusHistory: [{ status: toPrintJobStatus(order.status), timestamp: new Date(order.updated_at) }],
   };
 };
@@ -111,6 +112,19 @@ const DashboardV2: React.FC = () => {
 
   const handleAccept = useCallback(
     async (id: string) => {
+      const current = jobs.find((job) => job.id === id);
+      if (!current) return;
+      if (current.backendStatus === "CONFIRMED" || current.backendStatus === "IN_PRODUCTION") {
+        updateJob(id, (job) => ({
+          ...job,
+          status: "printing" as PrintJobStatus,
+          backendStatus: current.backendStatus,
+          acceptedAt: job.acceptedAt ?? new Date(),
+          statusHistory: addHistory(job, "printing"),
+        }));
+        toast.info("Job is already accepted.");
+        return;
+      }
       try {
         await ordersService.updateStatus(id, "CONFIRMED");
       } catch (error) {
@@ -122,13 +136,14 @@ const DashboardV2: React.FC = () => {
         return {
           ...job,
           status: "printing" as PrintJobStatus,
+          backendStatus: "CONFIRMED",
           acceptedAt: new Date(),
           statusHistory: addHistory(job, "printing"),
         };
       });
       toast.success("Job accepted — moved to active queue");
     },
-    [updateJob]
+    [jobs, updateJob]
   );
 
   const handleReject = useCallback(
@@ -151,6 +166,21 @@ const DashboardV2: React.FC = () => {
 
   const handleStartPrint = useCallback(
     async (id: string) => {
+      const current = jobs.find((job) => job.id === id);
+      if (!current) return;
+      if (current.backendStatus === "IN_PRODUCTION") {
+        updateJob(id, (job) => ({
+          ...job,
+          productionStartedAt: job.productionStartedAt ?? new Date(),
+          backendStatus: "IN_PRODUCTION",
+        }));
+        toast.info("Print job is already in production.");
+        return;
+      }
+      if (current.backendStatus !== "CONFIRMED") {
+        toast.error("Accept this job before starting production.");
+        return;
+      }
       try {
         await ordersService.updateStatus(id, "IN_PRODUCTION");
       } catch (error) {
@@ -160,17 +190,24 @@ const DashboardV2: React.FC = () => {
       updateJob(id, (job) => ({
         ...job,
         productionStartedAt: job.productionStartedAt ?? new Date(),
+        backendStatus: "IN_PRODUCTION",
         statusHistory: addHistory(job, "printing"),
       }));
       toast.success("Print job started");
     },
-    [updateJob]
+    [jobs, updateJob]
   );
 
   const handleMarkReady = useCallback(
     async (id: string) => {
       try {
-        const nextStatus: OrderStatusDto = jobs.find((j) => j.id === id)?.status === "ready"
+        const current = jobs.find((j) => j.id === id);
+        if (!current) return;
+        if (current.backendStatus !== "IN_PRODUCTION" && current.backendStatus !== "READY") {
+          toast.error("Start production before marking this job ready.");
+          return;
+        }
+        const nextStatus: OrderStatusDto = current.backendStatus === "READY"
           ? "DELIVERED"
           : "READY";
         await ordersService.updateStatus(id, nextStatus);
@@ -183,12 +220,14 @@ const DashboardV2: React.FC = () => {
           return {
             ...job,
             status: "delivered" as PrintJobStatus,
+            backendStatus: "DELIVERED",
             statusHistory: addHistory(job, "delivered"),
           };
         }
         return {
           ...job,
           status: "ready" as PrintJobStatus,
+          backendStatus: "READY",
           readyAt: new Date(),
           statusHistory: addHistory(job, "ready"),
         };
