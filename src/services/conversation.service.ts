@@ -25,6 +25,7 @@ export interface UploadedAssetDto {
   name: string;
   content_type: string;
   size_bytes: number;
+  url: string;
 }
 
 export const conversationService = {

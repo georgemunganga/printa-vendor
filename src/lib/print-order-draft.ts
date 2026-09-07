@@ -4,6 +4,7 @@ export interface UploadedPrintFile {
   contentType: string;
   sizeBytes: number;
   uploadedAt: string;
+  url?: string;
 }
 
 export interface PrintOrderDraft {
@@ -37,6 +38,7 @@ export const readPrintOrderDraft = (): PrintOrderDraft => {
             && typeof file.contentType === "string"
             && typeof file.sizeBytes === "number"
             && typeof file.uploadedAt === "string"
+            && (file.url === undefined || typeof file.url === "string")
           ))
         : [],
       specifications: parsed.specifications && typeof parsed.specifications === "object"

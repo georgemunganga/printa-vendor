@@ -477,6 +477,8 @@ const Checkout = () => {
           quantity: Math.max(printOrderDraft.files.length, 1),
           customisation: {
             order_kind: 'print_job',
+            asset_id: printOrderDraft.files[0]?.assetId,
+            asset_url: printOrderDraft.files[0]?.url,
             category: printOrderDraft.category,
             specifications: printOrderDraft.specifications,
             uploaded_assets: printOrderDraft.files.map((file) => ({

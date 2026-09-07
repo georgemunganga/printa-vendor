@@ -21,7 +21,7 @@ interface UploadingFile {
   uploadedFile?: UploadedPrintFile;
 }
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
 export const FileUpload: React.FC<FileUploadProps> = ({ initialFiles = [], onFilesChange }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -86,6 +86,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ initialFiles = [], onFil
         contentType: uploaded.content_type || pendingFile.file.type,
         sizeBytes: uploaded.size_bytes ?? pendingFile.file.size,
         uploadedAt: new Date().toISOString(),
+        url: uploaded.url,
       };
 
       setUploadingFiles((current) => {
@@ -112,20 +113,20 @@ export const FileUpload: React.FC<FileUploadProps> = ({ initialFiles = [], onFil
 
   const handleFiles = useCallback((files: File[]) => {
     // Check file types
-    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/svg+xml', 'image/tiff', 'image/webp'];
 
     const processedFiles: UploadingFile[] = [];
 
     files.forEach(file => {
       // Check file type
       if (!validTypes.includes(file.type)) {
-        toast.error(`${file.name}: Invalid file type. Please upload PDF, JPG, PNG, or DOCX files.`);
+        toast.error(`${file.name}: Upload a PDF, JPG, PNG, SVG, TIFF, or WebP file.`);
         return;
       }
 
-      // Check file size (50MB limit)
+      // Keep client validation aligned with the backend asset limit.
       if (file.size > MAX_FILE_SIZE) {
-        toast.error(`${file.name}: File too large. Maximum size is 50MB.`);
+        toast.error(`${file.name}: File too large. Maximum size is 20MB.`);
         return;
       }
 
@@ -190,7 +191,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ initialFiles = [], onFil
               multiple
               onChange={handleFileChange}
               className="hidden"
-              accept=".pdf,.jpg,.jpeg,.png,.docx"
+              accept=".pdf,.jpg,.jpeg,.png,.svg,.tif,.tiff,.webp"
             />
 
             <div className="flex flex-col items-center justify-center py-4">
@@ -224,7 +225,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ initialFiles = [], onFil
               </label>
 
               <p className="text-xs text-gray-400 mt-4">
-                PDF, JPG, PNG, DOCX (max 50MB)
+                PDF, JPG, PNG, SVG, TIFF, WebP (max 20MB)
               </p>
             </div>
           </div>
@@ -249,7 +250,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ initialFiles = [], onFil
               multiple
               onChange={handleFileChange}
               className="hidden"
-              accept=".pdf,.jpg,.jpeg,.png,.docx"
+              accept=".pdf,.jpg,.jpeg,.png,.svg,.tif,.tiff,.webp"
             />
 
             <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -381,7 +382,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ initialFiles = [], onFil
                   <Plus size={24} className="text-gray-500" />
                 </div>
                 <span className="text-sm text-gray-500 font-medium">Add more</span>
-                <span className="text-xs text-gray-400 mt-1">Max 50MB</span>
+                <span className="text-xs text-gray-400 mt-1">Max 20MB</span>
               </motion.label>
             </div>
           </div>

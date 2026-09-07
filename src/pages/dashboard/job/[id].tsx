@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { ErrorState, LoadingState } from "@/components/common";
 import { formatMoney } from "@/lib/money";
 import { useLiveJobDetails } from "@/hooks/use-live-job-details";
+import { assetService } from "@/services/asset.service";
 
 /* ─── Status config ─── */
 
@@ -84,6 +85,29 @@ const JobDetailsPage = () => {
     slaProgress,
   } = useLiveJobDetails(id);
   const [showPreview, setShowPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  const openArtwork = async (preview = false) => {
+    if (!order?.fileUrl) {
+      toast.error("No production artwork is attached to this order.");
+      return;
+    }
+    try {
+      if (preview) {
+        const objectUrl = await assetService.loadObjectUrl(order.fileUrl);
+        setPreviewUrl(objectUrl);
+        setShowPreview(true);
+      } else {
+        await assetService.open(order.fileUrl);
+      }
+    } catch (downloadError) {
+      toast.error(downloadError instanceof Error ? downloadError.message : "Unable to load the production artwork.");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -247,7 +271,7 @@ const JobDetailsPage = () => {
           <div className="mt-4 grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => setShowPreview(true)}
+              onClick={() => void openArtwork(true)}
               className="flex items-center justify-center gap-2 rounded-xl bg-white text-gray-900 hover:bg-gray-100 py-2.5 text-sm font-semibold transition"
             >
               <Eye size={16} />
@@ -255,14 +279,7 @@ const JobDetailsPage = () => {
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (order.fileUrl) {
-                  window.open(order.fileUrl, "_blank");
-                  toast.success("Downloading attachments...");
-                } else {
-                  toast.error("No attachments available");
-                }
-              }}
+              onClick={() => void openArtwork()}
               className="flex items-center justify-center gap-2 rounded-xl bg-white/10 hover:bg-white/15 py-2.5 text-sm font-semibold transition"
             >
               <Paperclip size={16} />
@@ -547,9 +564,9 @@ const JobDetailsPage = () => {
         <div className="space-y-4 py-2">
           {/* Preview area */}
           <div className="rounded-2xl bg-gray-100 border border-gray-200 min-h-[400px] flex flex-col items-center justify-center p-4">
-            {order.fileUrl ? (
+            {previewUrl ? (
               <iframe
-                src={order.fileUrl}
+                src={previewUrl}
                 title="File Preview"
                 className="w-full h-[60vh] rounded-xl bg-white"
               />
@@ -587,12 +604,7 @@ const JobDetailsPage = () => {
             </div>
             <button
               type="button"
-              onClick={() => {
-                if (order.fileUrl) {
-                  window.open(order.fileUrl, "_blank");
-                  toast.success("Downloading...");
-                }
-              }}
+              onClick={() => void openArtwork()}
               disabled={!order.fileUrl}
               className="p-2.5 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-600 transition disabled:opacity-40"
             >
@@ -610,12 +622,7 @@ const JobDetailsPage = () => {
               Close
             </Button>
             <Button
-              onClick={() => {
-                if (order.fileUrl) {
-                  window.open(order.fileUrl, "_blank");
-                  toast.success("Downloading attachments...");
-                }
-              }}
+              onClick={() => void openArtwork()}
               disabled={!order.fileUrl}
               className="flex-1 rounded-xl h-11 bg-gray-900"
             >

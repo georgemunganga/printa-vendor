@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { ErrorState, LoadingState } from "@/components/common";
 import { formatMoney } from "@/lib/money";
 import { useLiveJobDetails } from "@/hooks/use-live-job-details";
+import { assetService } from "@/services/asset.service";
 
 const statusConfig: Record<
   string,
@@ -73,9 +74,13 @@ const JobDetailsV2Page = () => {
     }
   };
 
-  const handleDownloadFile = () => {
+  const handleDownloadFile = async () => {
     if (order?.fileUrl) {
-      window.open(order.fileUrl, "_blank");
+      try {
+        await assetService.open(order.fileUrl);
+      } catch (downloadError) {
+        toast.error(downloadError instanceof Error ? downloadError.message : "Unable to load the production artwork.");
+      }
     }
   };
 
