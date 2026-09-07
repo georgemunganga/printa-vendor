@@ -7,13 +7,15 @@ import { toast } from "sonner";
 import { PrintJob, PrintJobStatus } from "@/types";
 import type { OrderDto, OrderStatusDto } from "@/services/contracts";
 import { ordersService } from "@/services/orders.service";
+import { inventoryService } from "@/services/inventory.service";
+import { catalogService } from "@/services/catalog.service";
 import { conversationService, type ConversationMessageDto } from "@/services/conversation.service";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import { BackButton } from "@/components/dashboard/BackButton";
 import { useStore } from "@/context/store-context";
 import { useAuth } from "@/context/auth-context";
-import { getOrderKind } from "@/lib/order-kind";
+import { buildStoreProductDisplayMap, getOrderKindFromItems, summarizeOrderItems, type StoreProductDisplayMap } from "@/lib/order-display";
 import { formatMoney } from "@/lib/money";
 
 interface Attachment {
@@ -63,15 +65,15 @@ const toPrintJobStatus = (status: OrderStatusDto): PrintJobStatus => {
   }
 };
 
-const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
+const mapOrderToPrintJob = (order: OrderDto, productByStoreProductId?: StoreProductDisplayMap): PrintJob => {
   const items = order.items ?? [];
   const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
   const customerName = order.customer_id ? `Customer ${order.customer_id.slice(0, 8)}` : "Walk-in customer";
-  const orderKind = getOrderKind(order);
+  const orderKind = getOrderKindFromItems(order, productByStoreProductId);
 
   return {
     id: order.id,
-    fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
+    fileName: `${summarizeOrderItems(order, productByStoreProductId)} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status: toPrintJobStatus(order.status),
     totalPrice: order.total,
     currency: order.currency,
@@ -656,9 +658,14 @@ const ChatPage = () => {
       }
 
       try {
-        const orders = await ordersService.listByStore(activeStore.id);
+        const [orders, storeProducts, catalogueProducts] = await Promise.all([
+          ordersService.listByStore(activeStore.id),
+          inventoryService.listProducts(activeStore.id),
+          catalogService.listProducts({ active: true }),
+        ]);
+        const productMap = buildStoreProductDisplayMap(storeProducts, catalogueProducts);
         if (!cancelled) {
-          setStoreOrders(orders.map(mapOrderToPrintJob));
+          setStoreOrders(orders.map((order) => mapOrderToPrintJob(order, productMap)));
           setMessages([]);
         }
       } catch {

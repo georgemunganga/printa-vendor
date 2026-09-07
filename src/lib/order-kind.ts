@@ -23,7 +23,8 @@ export const orderKindNote = (kind: OrderKind) =>
 
 export const isPrintProduct = (product: PlatformProductDto): boolean => {
   const source = product.attributes?.inventory_source;
-  if (source !== "custom") return true;
+  if (source === "custom") return false;
+  if (source === "printa") return true;
   const text = `${product.name} ${product.category} ${product.description ?? ""}`.toLowerCase();
   return PRINT_TERMS.some((term) => text.includes(term));
 };

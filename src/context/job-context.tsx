@@ -3,7 +3,9 @@ import { toast } from "sonner";
 import { PrintJob, PrintJobStatus } from "@/types";
 import type { OrderDto, OrderStatusDto } from "@/services/contracts";
 import { ordersService } from "@/services/orders.service";
-import { getOrderKind } from "@/lib/order-kind";
+import { inventoryService } from "@/services/inventory.service";
+import { catalogService } from "@/services/catalog.service";
+import { buildStoreProductDisplayMap, getOrderKindFromItems, summarizeOrderItems, type StoreProductDisplayMap } from "@/lib/order-display";
 import { useStore } from "./store-context";
 
 interface JobContextValue {
@@ -34,14 +36,14 @@ const toPrintJobStatus = (status: OrderStatusDto): PrintJobStatus => {
   }
 };
 
-const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
+const mapOrderToPrintJob = (order: OrderDto, productByStoreProductId?: StoreProductDisplayMap): PrintJob => {
   const items = order.items ?? [];
   const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
-  const orderKind = getOrderKind(order);
+  const orderKind = getOrderKindFromItems(order, productByStoreProductId);
   const status = toPrintJobStatus(order.status);
   return {
     id: order.id,
-    fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
+    fileName: `${summarizeOrderItems(order, productByStoreProductId)} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status,
     totalPrice: order.total,
     currency: order.currency,
@@ -89,8 +91,13 @@ const JobProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         return;
       }
       try {
-        const orders = await ordersService.listByStore(activeStore.id);
-        if (!cancelled) setJobs(orders.map(mapOrderToPrintJob));
+        const [orders, storeProducts, catalogueProducts] = await Promise.all([
+          ordersService.listByStore(activeStore.id),
+          inventoryService.listProducts(activeStore.id),
+          catalogService.listProducts({ active: true }),
+        ]);
+        const productMap = buildStoreProductDisplayMap(storeProducts, catalogueProducts);
+        if (!cancelled) setJobs(orders.map((order) => mapOrderToPrintJob(order, productMap)));
       } catch {
         if (!cancelled) setJobs([]);
       }
@@ -103,7 +110,7 @@ const JobProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const replaceLiveOrder = useCallback((order: OrderDto) => {
     const job = mapOrderToPrintJob(order);
-    setJobs((previous) => previous.map((current) => (current.id === job.id ? job : current)));
+    setJobs((previous) => previous.map((current) => (current.id === job.id ? { ...job, fileName: current.fileName } : current)));
   }, []);
 
   const persistStatus = useCallback(

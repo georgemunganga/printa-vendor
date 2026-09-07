@@ -21,8 +21,10 @@ import { useStore } from "@/context/store-context";
 import { PrintJob } from "@/types";
 import { Button } from "@/components/ui/button";
 import { ordersService } from "@/services/orders.service";
+import { inventoryService } from "@/services/inventory.service";
+import { catalogService } from "@/services/catalog.service";
 import type { OrderDto, OrderStatusDto } from "@/services/contracts";
-import { getOrderKind } from "@/lib/order-kind";
+import { buildStoreProductDisplayMap, getOrderKindFromItems, summarizeOrderItems, type StoreProductDisplayMap } from "@/lib/order-display";
 
 /* ─── Channel filter ─── */
 type ChannelFilter = "all" | "online" | "walk-in";
@@ -65,12 +67,12 @@ const toPrintJobStatus = (status: OrderStatusDto): PrintJob["status"] => {
   }
 };
 
-const toPrintJob = (order: OrderDto): PrintJob => {
+const toPrintJob = (order: OrderDto, productByStoreProductId?: StoreProductDisplayMap): PrintJob => {
   const itemCount = order.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 1;
-  const orderKind = getOrderKind(order);
+  const orderKind = getOrderKindFromItems(order, productByStoreProductId);
   return {
     id: order.id,
-    fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
+    fileName: `${summarizeOrderItems(order, productByStoreProductId)} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status: toPrintJobStatus(order.status),
     totalPrice: order.total,
     currency: order.currency,
@@ -169,8 +171,13 @@ const OrderHistoryPage: React.FC = () => {
         return;
       }
       try {
-        const orders = await ordersService.listByStore(activeStore.id);
-        if (!cancelled) setJobs(orders.map(toPrintJob));
+        const [orders, storeProducts, catalogueProducts] = await Promise.all([
+          ordersService.listByStore(activeStore.id),
+          inventoryService.listProducts(activeStore.id),
+          catalogService.listProducts({ active: true }),
+        ]);
+        const productMap = buildStoreProductDisplayMap(storeProducts, catalogueProducts);
+        if (!cancelled) setJobs(orders.map((order) => toPrintJob(order, productMap)));
       } catch {
         if (!cancelled) setJobs(fallbackJobs);
       }

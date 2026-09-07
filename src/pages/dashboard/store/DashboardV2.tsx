@@ -14,7 +14,9 @@ import { IncomingJobCard } from "@/components/dashboard/live-feed/IncomingJobCar
 import { ActiveJobCard } from "@/components/dashboard/live-feed/ActiveJobCard";
 import { useStore } from "@/context/store-context";
 import { ordersService } from "@/services/orders.service";
-import { getOrderKind } from "@/lib/order-kind";
+import { inventoryService } from "@/services/inventory.service";
+import { catalogService } from "@/services/catalog.service";
+import { buildStoreProductDisplayMap, getOrderKindFromItems, summarizeOrderItems, type StoreProductDisplayMap } from "@/lib/order-display";
 
 const addHistory = (job: PrintJob, status: PrintJobStatus) => {
   const history = job.statusHistory ? [...job.statusHistory] : [];
@@ -37,13 +39,13 @@ const toPrintJobStatus = (status: OrderStatusDto): PrintJobStatus => {
   }
 };
 
-const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
+const mapOrderToPrintJob = (order: OrderDto, productByStoreProductId?: StoreProductDisplayMap): PrintJob => {
   const items = order.items ?? [];
   const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
-  const orderKind = getOrderKind(order);
+  const orderKind = getOrderKindFromItems(order, productByStoreProductId);
   return {
     id: order.id,
-    fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
+    fileName: `${summarizeOrderItems(order, productByStoreProductId)} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status: toPrintJobStatus(order.status),
     totalPrice: order.total,
     currency: order.currency,
@@ -84,9 +86,14 @@ const DashboardV2: React.FC = () => {
       }
 
       try {
-        const orders = await ordersService.listByStore(activeStore.id);
+        const [orders, storeProducts, catalogueProducts] = await Promise.all([
+          ordersService.listByStore(activeStore.id),
+          inventoryService.listProducts(activeStore.id),
+          catalogService.listProducts({ active: true }),
+        ]);
+        const productMap = buildStoreProductDisplayMap(storeProducts, catalogueProducts);
         if (!cancelled) {
-          setJobs(orders.map(mapOrderToPrintJob).filter((job) => job.orderKind === "print_job"));
+          setJobs(orders.map((order) => mapOrderToPrintJob(order, productMap)).filter((job) => job.orderKind === "print_job"));
         }
       } catch {
         if (!cancelled) {
