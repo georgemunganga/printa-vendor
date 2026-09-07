@@ -10,8 +10,9 @@ import { useStore } from "@/context/store-context";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { LoadingState, StatusChip } from "@/components/common";
+import { SettingToggleRow } from "@/components/settings";
 import { operatingHoursService } from "@/services/operating-hours.service";
 import { inventoryService } from "@/services/inventory.service";
 import { defaultNotificationPreferences, notificationPreferencesService, type NotificationPreferencesDto } from "@/services/notification-preferences.service";
@@ -605,7 +606,7 @@ const SettingsPage = () => {
         description={activeStore ? `Public store details for ${activeStore.name}.` : "Select a store to manage its profile."}
       >
         {isLoadingStore ? (
-          <div className="py-8 text-center text-sm text-gray-500">Loading store profile…</div>
+          <LoadingState title="Loading store profile…" variant="inline" className="justify-center py-8" />
         ) : (
           <div className="space-y-4 py-2">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -665,7 +666,7 @@ const SettingsPage = () => {
         description={activeStore ? `Published availability for ${activeStore.name}.` : "Select a store to manage operating hours."}
       >
         {isLoadingOperatingHours ? (
-          <div className="py-8 text-center text-sm text-gray-500">Loading operating hours…</div>
+          <LoadingState title="Loading operating hours…" variant="inline" className="justify-center py-8" />
         ) : (
           <div className="space-y-3 py-2">
             <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -750,27 +751,20 @@ const SettingsPage = () => {
                 <Label className="text-sm font-semibold text-gray-900">OTP sign-in</Label>
                 <p className="mt-1 text-xs leading-5 text-gray-600">Email or phone OTP sign-in is active for this account.</p>
               </div>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-green-700">Active</span>
+              <StatusChip label="Active" tone="success" className="bg-white" />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <Label htmlFor="auto-session-timeout" className="text-sm font-semibold text-gray-900">Auto session timeout</Label>
-                <p className="mt-1 text-xs leading-5 text-gray-500">Log this device out after a period of inactivity.</p>
-              </div>
-              <Switch
-                id="auto-session-timeout"
-                checked={securityPreferences.auto_session_timeout_enabled}
-                onCheckedChange={(checked) => updateSecurityPreference("auto_session_timeout_enabled", checked)}
-                disabled={!canManageSecurityPreferences || isSavingSecurityPreferences}
-                className="data-[state=checked]:bg-printa-red"
-              />
-            </div>
-
+          <SettingToggleRow
+            id="auto-session-timeout"
+            title="Auto session timeout"
+            description="Log this device out after a period of inactivity."
+            checked={securityPreferences.auto_session_timeout_enabled}
+            onCheckedChange={(checked) => updateSecurityPreference("auto_session_timeout_enabled", checked)}
+            disabled={!canManageSecurityPreferences || isSavingSecurityPreferences}
+          >
             {securityPreferences.auto_session_timeout_enabled && (
-              <div className="mt-4">
+              <div>
                 <Label htmlFor="session-timeout-minutes" className="text-sm font-medium">Timeout after</Label>
                 <select
                   id="session-timeout-minutes"
@@ -785,7 +779,7 @@ const SettingsPage = () => {
                 </select>
               </div>
             )}
-          </div>
+          </SettingToggleRow>
 
           {!canManageSecurityPreferences && (
             <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">You can view security settings, but only the owner can save changes.</p>
@@ -821,7 +815,7 @@ const SettingsPage = () => {
         description={activeStore ? `Notification preferences for ${activeStore.name}.` : "Select a store to manage notification preferences."}
       >
         {isLoadingNotificationPreferences ? (
-          <div className="py-8 text-center text-sm text-gray-500">Loading notification preferences…</div>
+          <LoadingState title="Loading notification preferences…" variant="inline" className="justify-center py-8" />
         ) : (
           <div className="space-y-4 py-2">
             {[
@@ -832,19 +826,15 @@ const SettingsPage = () => {
               { key: "stock_alerts" as const, title: "Stock alerts", body: "Notify this store when inventory needs attention." },
               { key: "promotions" as const, title: "Promotions", body: "Receive product updates, offers, and growth tips from Printa." },
             ].map((preference) => (
-              <div key={preference.key} className="flex items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-white p-4">
-                <div className="min-w-0">
-                  <Label htmlFor={preference.key} className="text-sm font-semibold text-gray-900">{preference.title}</Label>
-                  <p className="mt-1 text-xs leading-5 text-gray-500">{preference.body}</p>
-                </div>
-                <Switch
-                  id={preference.key}
-                  checked={notificationPreferences[preference.key]}
-                  onCheckedChange={(checked) => updateNotificationPreference(preference.key, checked)}
-                  disabled={!canManageNotificationPreferences || isSavingNotificationPreferences}
-                  className="data-[state=checked]:bg-printa-red"
-                />
-              </div>
+              <SettingToggleRow
+                key={preference.key}
+                id={preference.key}
+                title={preference.title}
+                description={preference.body}
+                checked={notificationPreferences[preference.key]}
+                onCheckedChange={(checked) => updateNotificationPreference(preference.key, checked)}
+                disabled={!canManageNotificationPreferences || isSavingNotificationPreferences}
+              />
             ))}
             {!canManageNotificationPreferences && (
               <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">You can view notification preferences, but only the owner or an authorized manager can save changes.</p>
@@ -881,7 +871,7 @@ const SettingsPage = () => {
         description={activeStore ? `Privacy preferences for ${activeStore.name}.` : "Select a store to manage privacy preferences."}
       >
         {isLoadingPrivacyPreferences ? (
-          <div className="py-8 text-center text-sm text-gray-500">Loading privacy preferences…</div>
+          <LoadingState title="Loading privacy preferences…" variant="inline" className="justify-center py-8" />
         ) : (
           <div className="space-y-4 py-2">
             {[
@@ -890,19 +880,15 @@ const SettingsPage = () => {
               { key: "location_services" as const, title: "Location services", body: "Use this store’s location for routing, coverage, and nearby customer experiences." },
               { key: "public_store_profile" as const, title: "Public store profile", body: "Allow this store’s name, city, hours, and contact details to appear on customer-facing pages." },
             ].map((preference) => (
-              <div key={preference.key} className="flex items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-white p-4">
-                <div className="min-w-0">
-                  <Label htmlFor={preference.key} className="text-sm font-semibold text-gray-900">{preference.title}</Label>
-                  <p className="mt-1 text-xs leading-5 text-gray-500">{preference.body}</p>
-                </div>
-                <Switch
-                  id={preference.key}
-                  checked={privacyPreferences[preference.key]}
-                  onCheckedChange={(checked) => updatePrivacyPreference(preference.key, checked)}
-                  disabled={!canManagePrivacyPreferences || isSavingPrivacyPreferences}
-                  className="data-[state=checked]:bg-printa-red"
-                />
-              </div>
+              <SettingToggleRow
+                key={preference.key}
+                id={preference.key}
+                title={preference.title}
+                description={preference.body}
+                checked={privacyPreferences[preference.key]}
+                onCheckedChange={(checked) => updatePrivacyPreference(preference.key, checked)}
+                disabled={!canManagePrivacyPreferences || isSavingPrivacyPreferences}
+              />
             ))}
             {!canManagePrivacyPreferences && (
               <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">You can view privacy preferences, but only the owner can save changes.</p>

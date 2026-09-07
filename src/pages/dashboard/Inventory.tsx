@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronUp,
@@ -15,10 +15,8 @@ import {
   Palette,
   Plus,
   Printer,
-  Search,
   Sparkles,
   Trash2,
-  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -32,6 +30,7 @@ import { useAuth } from "@/context/auth-context";
 import { catalogService } from "@/services/catalog.service";
 import { inventoryService } from "@/services/inventory.service";
 import type { PlatformProductDto, VendorStoreProductDto } from "@/services/contracts";
+import { EmptyState, ErrorState, LoadingState, SearchBar } from "@/components/common";
 
 type InventorySource = "printa" | "custom";
 
@@ -146,13 +145,11 @@ const Inventory = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceTab, setSourceTab] = useState<InventorySource>("printa");
   const [wizardStep, setWizardStep] = useState<0 | 1>(0);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<ProductForm>(emptyForm);
 
   const refreshInventory = useCallback(async () => {
@@ -336,33 +333,13 @@ const Inventory = () => {
     <DashboardLayout pageTitle="Inventory">
       <div className="mb-5">
         <div className="flex items-start justify-between gap-3">
-          <div className={searchOpen ? "hidden md:block" : ""}>
+          <div>
             <h1 className="dashboard-page-title">Inventory</h1>
             <p className="text-xs text-gray-400 mt-0.5">{filtered.length} {sourceTab === "printa" ? "Printa catalogue" : "custom"} products</p>
           </div>
 
-          {searchOpen ? (
-            <div className="flex-1 relative md:hidden">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              <Input ref={searchInputRef} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search products..." autoFocus className="pl-9 pr-9" />
-              <button type="button" onClick={() => { setSearchQuery(""); setSearchOpen(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                <X size={16} />
-              </button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 50); }} className="md:hidden w-9 h-9 flex items-center justify-center rounded-full bg-white border border-gray-200 text-gray-500 hover:text-gray-700 transition shrink-0">
-              <Search size={16} />
-            </button>
-          )}
-
           <div className="flex items-center gap-2">
-            <div className="hidden md:block relative w-56">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              <Input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search products..." className="pl-9 pr-9" />
-              {searchQuery && (
-                <button type="button" onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={16} /></button>
-              )}
-            </div>
+            <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search products…" className="hidden w-56 md:block" />
             <div className="hidden md:flex items-center border border-gray-200 rounded-xl overflow-hidden">
               <button type="button" onClick={() => setViewMode("grid")} className={`p-2 transition ${viewMode === "grid" ? "bg-gray-100 text-gray-900" : "bg-white text-gray-400 hover:text-gray-600"}`}><Grid3X3 size={18} /></button>
               <button type="button" onClick={() => setViewMode("list")} className={`p-2 transition ${viewMode === "list" ? "bg-gray-100 text-gray-900" : "bg-white text-gray-400 hover:text-gray-600"}`}><List size={18} /></button>
@@ -370,6 +347,7 @@ const Inventory = () => {
             <Button onClick={openAdd} className="gap-2 bg-gray-900 hover:bg-gray-800" size="sm"><Plus size={16} /><span className="hidden sm:inline">New Product</span></Button>
           </div>
         </div>
+        <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search products…" className="mt-3 md:hidden" />
       </div>
 
       <div className="mb-4 inline-flex rounded-2xl border border-gray-200 bg-white p-1 shadow-sm">
@@ -413,7 +391,7 @@ const Inventory = () => {
       </div>
 
       {isLoading ? (
-        <div className="rounded-2xl bg-white border border-gray-100 p-12 text-center text-sm text-gray-500">Loading live inventory...</div>
+        <LoadingState title="Loading inventory…" description="Fetching live stock for this store." variant="cards" rows={4} />
       ) : (
         <>
           {viewMode === "list" && filtered.length > 0 && (
@@ -450,7 +428,16 @@ const Inventory = () => {
           )}
 
           {filtered.length === 0 && (
-            <div className="rounded-2xl bg-white border border-gray-100 p-12 text-center"><div className="w-14 h-14 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center"><Package size={24} className="text-gray-300" /></div><p className="text-sm font-semibold text-gray-900">{loadError ? "Unable to load products" : "No products found"}</p><p className="mt-1 text-xs text-gray-400">{loadError ? loadError : searchQuery ? "Try a different search term" : sourceTab === "printa" ? "Claim a product from the Printa catalogue to get started" : "Create a custom item for goods this shop sells outside the Printa catalogue"}</p>{loadError && <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="mt-3 text-xs font-semibold text-printa-red hover:underline">Try again</button>}</div>
+            loadError ? (
+              <ErrorState message={loadError} title="Unable to load products" onRetry={() => setReloadKey((key) => key + 1)} />
+            ) : (
+              <EmptyState
+                icon={Package}
+                title="No products found"
+                description={searchQuery ? "Try a different search term." : sourceTab === "printa" ? "Claim a product from the Printa catalogue to get started." : "Create a custom item for goods this shop sells outside the Printa catalogue."}
+                action={!searchQuery ? <Button onClick={openAdd} className="bg-gray-900 hover:bg-gray-800" size="sm"><Plus size={16} className="mr-2" />New product</Button> : undefined}
+              />
+            )
           )}
         </>
       )}
