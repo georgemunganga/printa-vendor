@@ -2,7 +2,6 @@ import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { useJobContext } from "@/context/job-context";
 import { motion } from "framer-motion";
 import {
   Download,
@@ -19,6 +18,10 @@ import {
   Copy,
   ExternalLink,
 } from "lucide-react";
+import { toast } from "sonner";
+import { ErrorState, LoadingState } from "@/components/common";
+import { formatMoney } from "@/lib/money";
+import { useLiveJobDetails } from "@/hooks/use-live-job-details";
 
 const statusConfig: Record<
   string,
@@ -53,9 +56,16 @@ const statusConfig: Record<
 const JobDetailsV2Page = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getJobById, acceptJob, startProduction, markReady, getSlaLabel } =
-    useJobContext();
-  const order = getJobById(id);
+  const {
+    order,
+    isLoading,
+    error,
+    reload,
+    acceptJob,
+    startProduction,
+    markReady,
+    slaLabel,
+  } = useLiveJobDetails(id);
 
   const handleCopyOrderId = () => {
     if (order?.id) {
@@ -68,6 +78,22 @@ const JobDetailsV2Page = () => {
       window.open(order.fileUrl, "_blank");
     }
   };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout pageTitle="Job Details">
+        <LoadingState title="Loading order…" description="Fetching the latest order details from Printa." />
+      </DashboardLayout>
+    );
+  }
+
+  if (error && !order) {
+    return (
+      <DashboardLayout pageTitle="Job Details">
+        <ErrorState title="Unable to load order" message={error} onRetry={reload} />
+      </DashboardLayout>
+    );
+  }
 
   if (!order) {
     return (
@@ -95,13 +121,16 @@ const JobDetailsV2Page = () => {
   const canAccept = isPrintJob && order.backendStatus === "PENDING";
   const canStart = isPrintJob && order.backendStatus === "CONFIRMED";
   const canMarkReady = isPrintJob && order.backendStatus === "IN_PRODUCTION";
-  const slaLabel = getSlaLabel(order);
+  const formattedPrice = formatMoney(order.totalPrice, order.currency);
 
-  // Format price
-  const formattedPrice = new Intl.NumberFormat("en-ZM", {
-    style: "currency",
-    currency: "ZMW",
-  }).format(order.totalPrice);
+  const runJobAction = async (action: () => Promise<void>, successMessage: string, failureMessage: string) => {
+    try {
+      await action();
+      toast.success(successMessage);
+    } catch (actionError) {
+      toast.error(actionError instanceof Error ? actionError.message : failureMessage);
+    }
+  };
 
   return (
     <DashboardLayout pageTitle={`${isPrintJob ? "Print Job" : "Till Sale"} ${order.id}`}>
@@ -514,7 +543,7 @@ const JobDetailsV2Page = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Button
               disabled={!canAccept}
-              onClick={() => acceptJob(order.id)}
+              onClick={() => void runJobAction(acceptJob, "Job accepted", "Unable to accept this job.")}
               className="h-14 text-base font-semibold"
             >
               <CheckCircle2 className="w-5 h-5 mr-2" />
@@ -524,7 +553,7 @@ const JobDetailsV2Page = () => {
             <Button
               variant="outline"
               disabled={!canStart}
-              onClick={() => startProduction(order.id)}
+              onClick={() => void runJobAction(startProduction, "Print job started", "Unable to start production.")}
               className="h-14 text-base font-semibold"
             >
               <Printer className="w-5 h-5 mr-2" />
@@ -534,7 +563,7 @@ const JobDetailsV2Page = () => {
             <Button
               variant="outline"
               disabled={!canMarkReady}
-              onClick={() => markReady(order.id)}
+              onClick={() => void runJobAction(markReady, "Print job marked ready", "Unable to mark this job ready.")}
               className="h-14 text-base font-semibold"
             >
               <Package className="w-5 h-5 mr-2" />

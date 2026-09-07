@@ -31,6 +31,27 @@ export const getOrderChannelLabel = (orderChannel?: PrintJob["orderChannel"]) =>
 export const getProductionLocationLabel = (orderKind?: PrintJob["orderKind"]) =>
   orderKind === "retail_sale" ? "Walk-in till" : "Production queue";
 
+export const formatJobDuration = (ms: number) => {
+  const totalMinutes = Math.ceil(Math.abs(ms) / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+};
+
+export const getSlaProgress = (job: PrintJob) => {
+  if (!job.estimatedDelivery) return 0;
+  const totalWindow = job.estimatedDelivery.getTime() - job.createdAt.getTime();
+  if (totalWindow <= 0) return 100;
+  const elapsed = Date.now() - job.createdAt.getTime();
+  return Math.min(100, Math.max(0, (elapsed / totalWindow) * 100));
+};
+
+export const getSlaLabel = (job: PrintJob) => {
+  if (!job.estimatedDelivery) return "ETA unavailable";
+  const diff = job.estimatedDelivery.getTime() - Date.now();
+  return `${diff >= 0 ? "Due in" : "Overdue"} ${formatJobDuration(diff)}`;
+};
+
 export const mapOrderToPrintJob = (
   order: OrderDto,
   productByStoreProductId?: StoreProductDisplayMap,

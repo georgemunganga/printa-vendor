@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
-import { useJobContext } from "@/context/job-context";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -25,6 +24,9 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ErrorState, LoadingState } from "@/components/common";
+import { formatMoney } from "@/lib/money";
+import { useLiveJobDetails } from "@/hooks/use-live-job-details";
 
 /* ─── Status config ─── */
 
@@ -71,15 +73,33 @@ const JobDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const {
-    getJobById,
+    order,
+    isLoading,
+    error,
+    reload,
     acceptJob,
     startProduction,
     markReady,
-    getSlaLabel,
-    getSlaProgress,
-  } = useJobContext();
-  const order = getJobById(id);
+    slaLabel,
+    slaProgress,
+  } = useLiveJobDetails(id);
   const [showPreview, setShowPreview] = useState(false);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout pageTitle="Job Details">
+        <LoadingState title="Loading order…" description="Fetching the latest order details from Printa." />
+      </DashboardLayout>
+    );
+  }
+
+  if (error && !order) {
+    return (
+      <DashboardLayout pageTitle="Job Details">
+        <ErrorState title="Unable to load order" message={error} onRetry={reload} />
+      </DashboardLayout>
+    );
+  }
 
   if (!order) {
     return (
@@ -113,13 +133,7 @@ const JobDetailsPage = () => {
   const canAccept = isPrintJob && order.backendStatus === "PENDING";
   const canStart = isPrintJob && order.backendStatus === "CONFIRMED";
   const canMarkReady = isPrintJob && order.backendStatus === "IN_PRODUCTION";
-  const slaLabel = getSlaLabel(order);
-  const slaProgress = getSlaProgress(order);
-
-  const formattedPrice = new Intl.NumberFormat("en-ZM", {
-    style: "currency",
-    currency: "ZMW",
-  }).format(order.totalPrice);
+  const formattedPrice = formatMoney(order.totalPrice, order.currency);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(order.id);
@@ -127,6 +141,15 @@ const JobDetailsPage = () => {
   };
 
   const statusIdx = TIMELINE_STEPS.findIndex((s) => s.key === order.status);
+
+  const runJobAction = async (action: () => Promise<void>, successMessage: string, failureMessage: string) => {
+    try {
+      await action();
+      toast.success(successMessage);
+    } catch (actionError) {
+      toast.error(actionError instanceof Error ? actionError.message : failureMessage);
+    }
+  };
 
   return (
     <DashboardLayout pageTitle={`${isPrintJob ? "Print Job" : "Till Sale"} ${order.id}`}>
@@ -479,7 +502,7 @@ const JobDetailsPage = () => {
             <div className="grid grid-cols-3 gap-2">
               <Button
                 disabled={!canAccept}
-                onClick={() => acceptJob(order.id)}
+                onClick={() => void runJobAction(acceptJob, "Job accepted", "Unable to accept this job.")}
                 className="h-11 rounded-xl text-xs font-semibold"
               >
                 <CheckCircle2 size={15} className="mr-1.5" />
@@ -488,7 +511,7 @@ const JobDetailsPage = () => {
               <Button
                 variant="outline"
                 disabled={!canStart}
-                onClick={() => startProduction(order.id)}
+                onClick={() => void runJobAction(startProduction, "Print job started", "Unable to start production.")}
                 className="h-11 rounded-xl text-xs font-semibold"
               >
                 <Printer size={15} className="mr-1.5" />
@@ -497,7 +520,7 @@ const JobDetailsPage = () => {
               <Button
                 variant="outline"
                 disabled={!canMarkReady}
-                onClick={() => markReady(order.id)}
+                onClick={() => void runJobAction(markReady, "Print job marked ready", "Unable to mark this job ready.")}
                 className="h-11 rounded-xl text-xs font-semibold"
               >
                 <Package size={15} className="mr-1.5" />

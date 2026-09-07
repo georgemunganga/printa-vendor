@@ -1,11 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { PrintJob, PrintJobStatus } from "@/types";
+import { PrintJob } from "@/types";
 import type { OrderDto, OrderStatusDto } from "@/services/contracts";
 import { ordersService } from "@/services/orders.service";
 import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
-import { buildStoreProductDisplayMap, getOrderKindFromItems, summarizeOrderItems, type StoreProductDisplayMap } from "@/lib/order-display";
+import { buildStoreProductDisplayMap } from "@/lib/order-display";
+import { getSlaLabel, getSlaProgress, mapOrderToPrintJob } from "@/lib/print-job";
 import { useStore } from "./store-context";
 
 interface JobContextValue {
@@ -19,64 +20,6 @@ interface JobContextValue {
 }
 
 const JobContext = createContext<JobContextValue | undefined>(undefined);
-
-const toPrintJobStatus = (status: OrderStatusDto): PrintJobStatus => {
-  switch (status) {
-    case "PENDING":
-      return "pending";
-    case "CONFIRMED":
-    case "IN_PRODUCTION":
-      return "printing";
-    case "READY":
-      return "ready";
-    case "DELIVERED":
-      return "delivered";
-    case "CANCELLED":
-      return "cancelled";
-  }
-};
-
-const mapOrderToPrintJob = (order: OrderDto, productByStoreProductId?: StoreProductDisplayMap): PrintJob => {
-  const items = order.items ?? [];
-  const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
-  const orderKind = getOrderKindFromItems(order, productByStoreProductId);
-  const status = toPrintJobStatus(order.status);
-  return {
-    id: order.id,
-    fileName: `${summarizeOrderItems(order, productByStoreProductId)} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
-    status,
-    totalPrice: order.total,
-    currency: order.currency,
-    pageCount: copies,
-    copies,
-    colorMode: "color",
-    printer: { name: orderKind === "print_job" ? "Production queue" : "Walk-in till" },
-    createdAt: new Date(order.created_at),
-    lastUpdated: new Date(order.updated_at),
-    customerName: order.customer_id ? `Customer ${order.customer_id.slice(0, 8)}` : "Walk-in customer",
-    deliveryType: order.delivery_address ? "rider" : "pickup",
-    orderChannel: order.channel === "POS" ? "walk-in" : "online",
-    notes: order.notes,
-    backendStatus: order.status,
-    orderKind,
-    statusHistory: [{ status, timestamp: new Date(order.updated_at) }],
-  };
-};
-
-const formatDuration = (ms: number) => {
-  const totalMinutes = Math.ceil(Math.abs(ms) / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-};
-
-const computeSlaProgress = (job: PrintJob) => {
-  if (!job.estimatedDelivery) return 0;
-  const totalWindow = job.estimatedDelivery.getTime() - job.createdAt.getTime();
-  if (totalWindow <= 0) return 100;
-  const elapsed = Date.now() - job.createdAt.getTime();
-  return Math.min(100, Math.max(0, (elapsed / totalWindow) * 100));
-};
 
 const JobProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { activeStore } = useStore();
@@ -162,15 +105,9 @@ const JobProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const getJobById = useCallback((id: string | undefined) => jobs.find((job) => job.id === id), [jobs]);
 
-  const getSlaLabel = useCallback((job: PrintJob) => {
-    if (!job.estimatedDelivery) return "ETA unavailable";
-    const diff = job.estimatedDelivery.getTime() - Date.now();
-    return `${diff >= 0 ? "Due in" : "Overdue"} ${formatDuration(diff)}`;
-  }, []);
-
   const value = useMemo(
-    () => ({ jobs, acceptJob, startProduction, markReady, getJobById, getSlaLabel, getSlaProgress: computeSlaProgress }),
-    [jobs, acceptJob, startProduction, markReady, getJobById, getSlaLabel],
+    () => ({ jobs, acceptJob, startProduction, markReady, getJobById, getSlaLabel, getSlaProgress }),
+    [jobs, acceptJob, startProduction, markReady, getJobById],
   );
 
   return <JobContext.Provider value={value}>{children}</JobContext.Provider>;
