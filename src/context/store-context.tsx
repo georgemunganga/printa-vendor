@@ -99,8 +99,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       void saveOfflineSnapshot(offlineKeys.stores(user.id), resolvedStores).catch(() => undefined);
       const savedId = localStorage.getItem(ACTIVE_STORE_ID_STORAGE_KEY);
       const savedStore = savedId ? resolvedStores.find((s) => s.id === savedId) ?? null : null;
-      const previousStore = activeStore ? resolvedStores.find((store) => store.id === activeStore.id) ?? null : null;
-      const nextActiveStore = previousStore ?? savedStore ?? (resolvedStores.length === 1 ? resolvedStores[0] : null);
+      const nextActiveStore = savedStore ?? (resolvedStores.length === 1 ? resolvedStores[0] : null);
       setActiveStoreState(nextActiveStore);
       persistActiveStore(nextActiveStore);
     } catch {
@@ -126,7 +125,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } finally {
       setIsHydrating(false);
     }
-  }, [user, isAuthenticated, isAuthLoading, activeStore, setActiveStoreScope]);
+  }, [user, isAuthenticated, isAuthLoading, setActiveStoreScope]);
 
   useEffect(() => {
     void refreshStores();
