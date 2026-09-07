@@ -362,8 +362,12 @@ const VendorOnboarding: React.FC = () => {
       {/* ═══════ Desktop left brand panel ═══════ */}
       <div className="hidden lg:flex lg:w-[380px] xl:w-[440px] bg-printa-red flex-col justify-between p-10 text-white shrink-0">
         <div>
-          <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center mb-8">
-            <span className="text-white text-xl font-bold">P</span>
+          <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center mb-8 p-2 shadow-sm">
+            <img
+              src="/printa-logo-black.png"
+              alt="Printa"
+              className="h-full w-full object-contain"
+            />
           </div>
           <h2 className="text-2xl font-bold leading-tight">
             Set up your printing business on Printa
