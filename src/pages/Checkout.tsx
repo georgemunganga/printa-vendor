@@ -12,9 +12,23 @@ import { DEFAULT_LOCATIONS, Location } from '@/data/locations';
 import { getApiKey } from '../../config/api-keys';
 import { useLoadScript } from '@react-google-maps/api';
 import { getVendorOnboardingState, patchVendorOnboardingState } from '@/lib/vendorOnboardingState';
-import { readPrintOrderDraft } from '@/lib/print-order-draft';
+import { clearPrintOrderDraft, readPrintOrderDraft } from '@/lib/print-order-draft';
+import { useStore } from '@/context/store-context';
+import { inventoryService } from '@/services/inventory.service';
+import { catalogService } from '@/services/catalog.service';
+import { ordersService } from '@/services/orders.service';
+import { isLikelyPrintProduct } from '@/lib/order-display';
+
+interface CheckoutOffering {
+  id: string;
+  name: string;
+  unitPrice: number;
+  currency: string;
+}
 
 const MapPicker = lazy(() => import('@/components/MapPicker'));
+const createCheckoutId = () => globalThis.crypto?.randomUUID?.()
+  ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 interface DeliverySuggestion {
   id: string;
@@ -54,8 +68,71 @@ const Checkout = () => {
   const [hasAutoLocated, setHasAutoLocated] = useState(false);
   const [onboardingSnapshot, setOnboardingSnapshot] = useState(getVendorOnboardingState());
   const [printOrderDraft] = useState(readPrintOrderDraft);
+  const { activeStore } = useStore();
+  const [offerings, setOfferings] = useState<CheckoutOffering[]>([]);
+  const [selectedOfferingId, setSelectedOfferingId] = useState('');
+  const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+  const [offeringError, setOfferingError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [storeMapCoords, setStoreMapCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const checkoutId = useRef(createCheckoutId());
 
-  const locationOptions = DEFAULT_LOCATIONS;
+  const locationOptions = useMemo<Location[]>(() => activeStore ? [{
+    ...DEFAULT_LOCATIONS[0],
+    id: activeStore.id,
+    name: activeStore.name,
+    address: activeStore.address,
+    distance: '',
+    eta: '',
+    lat: storeMapCoords?.lat ?? DEFAULT_LOCATIONS[0].lat,
+    lng: storeMapCoords?.lng ?? DEFAULT_LOCATIONS[0].lng,
+  }] : [], [activeStore, storeMapCoords]);
+
+  useEffect(() => {
+    setSelectedLocationId(deliveryMethod === 'pickup'
+      ? activeStore?.id ?? null
+      : currentCoords ? 'delivery-current' : null);
+  }, [activeStore?.id, currentCoords, deliveryMethod]);
+
+  useEffect(() => {
+    if (!activeStore?.id) {
+      setOfferings([]);
+      setSelectedOfferingId('');
+      setIsLoadingOfferings(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingOfferings(true);
+    setOfferingError('');
+    void Promise.all([
+      inventoryService.listProducts(activeStore.id),
+      catalogService.listProducts({ active: true }),
+    ]).then(([storeProducts, catalogue]) => {
+      if (cancelled) return;
+      const catalogueById = new Map(catalogue.map((product) => [product.id, product]));
+      const next = storeProducts
+        .filter((product) => {
+          const catalogueProduct = catalogueById.get(product.platform_product_id);
+          return product.is_available && catalogueProduct && isLikelyPrintProduct(catalogueProduct);
+        })
+        .map((product) => ({
+          id: product.id,
+          name: catalogueById.get(product.platform_product_id)?.name ?? 'Print service',
+          unitPrice: product.vendor_price,
+          currency: product.currency,
+        }));
+      setOfferings(next);
+      setSelectedOfferingId((current) => next.some((item) => item.id === current)
+        ? current
+        : next.length === 1 ? next[0].id : '');
+    }).catch((error) => {
+      if (!cancelled) setOfferingError(error instanceof Error ? error.message : 'Unable to load store offerings.');
+    }).finally(() => {
+      if (!cancelled) setIsLoadingOfferings(false);
+    });
+    return () => { cancelled = true; };
+  }, [activeStore?.id]);
 
   const filteredLocations = searchQuery
     ? locationOptions.filter(loc =>
@@ -79,7 +156,7 @@ const Checkout = () => {
         },
       ]
     : [];
-  const mapLocations = deliveryMethod === 'pickup' ? locationOptions : deliveryMarkers;
+  const mapLocations = deliveryMethod === 'pickup' ? storeMapCoords ? locationOptions : [] : deliveryMarkers;
   const mapCenter = selectedLocation
     ? { lat: selectedLocation.lat, lng: selectedLocation.lng }
     : currentCoords ?? undefined;
@@ -100,6 +177,25 @@ const Checkout = () => {
       placesServiceRef.current = new window.google.maps.places.PlacesService(document.createElement('div'));
     }
   }, [isGoogleMapsScriptReady]);
+
+  useEffect(() => {
+    if (!isGoogleMapsScriptReady || !activeStore?.address || !window.google?.maps?.Geocoder) {
+      setStoreMapCoords(null);
+      return;
+    }
+    let cancelled = false;
+    const geocoder = new window.google.maps.Geocoder();
+    void geocoder.geocode({ address: activeStore.address }).then(({ results }) => {
+      if (cancelled || !results[0]) return;
+      setStoreMapCoords({
+        lat: results[0].geometry.location.lat(),
+        lng: results[0].geometry.location.lng(),
+      });
+    }).catch(() => {
+      if (!cancelled) setStoreMapCoords(null);
+    });
+    return () => { cancelled = true; };
+  }, [activeStore?.address, isGoogleMapsScriptReady]);
 
   const handleSelectLocation = useCallback(
     (
@@ -369,11 +465,47 @@ const Checkout = () => {
     );
   }, [applyLocation, currentCoords, deliveryMethod, hasAutoLocated, selectNearestPickup]);
 
-  const handleCheckout = () => {
-    patchVendorOnboardingState({ testOrderCompleted: true });
-    setOnboardingSnapshot(getVendorOnboardingState());
-    toast.success("Onboarding test order completed. Opening dashboard...");
-    setTimeout(() => navigate('/dashboard'), 1200);
+  const handleCheckout = async () => {
+    if (!activeStore?.id || !selectedOfferingId || !selectedLocationId || printOrderDraft.files.length === 0 || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const order = await ordersService.place({
+        store_id: activeStore.id,
+        channel: 'ONLINE',
+        items: [{
+          vendor_store_product_id: selectedOfferingId,
+          quantity: Math.max(printOrderDraft.files.length, 1),
+          customisation: {
+            order_kind: 'print_job',
+            category: printOrderDraft.category,
+            specifications: printOrderDraft.specifications,
+            uploaded_assets: printOrderDraft.files.map((file) => ({
+              asset_id: file.assetId,
+              name: file.name,
+              content_type: file.contentType,
+              size_bytes: file.sizeBytes,
+            })),
+            primary_asset_id: printOrderDraft.files[0]?.assetId,
+            primary_file_name: printOrderDraft.files[0]?.name,
+          },
+        }],
+        notes: printOrderDraft.notes,
+        delivery_address: deliveryMethod === 'delivery' ? {
+          address: currentLocationAddress || searchQuery,
+          latitude: currentCoords?.lat,
+          longitude: currentCoords?.lng,
+        } : undefined,
+      }, `vendor-test-order-${activeStore.id}-${checkoutId.current}`);
+      patchVendorOnboardingState({ testOrderCompleted: true });
+      setOnboardingSnapshot(getVendorOnboardingState());
+      clearPrintOrderDraft();
+      toast.success(`Test order ${order.order_number} created.`);
+      navigate(`/dashboard/job/${order.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to create the test order.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   useEffect(() => {
@@ -385,7 +517,8 @@ const Checkout = () => {
 
   const handleUseCurrentLocation = () => {
     if (deliveryMethod === 'pickup') {
-      handleSelectLocation(locationOptions[0].id);
+      if (locationOptions[0]) handleSelectLocation(locationOptions[0].id);
+      else toast.error('Select an active store before choosing pickup.');
       return;
     }
 
@@ -609,6 +742,14 @@ const Checkout = () => {
                     locationId={selectedLocationId}
                     isDelivery={deliveryMethod === 'delivery'}
                     onCheckout={handleCheckout}
+                    offerings={offerings}
+                    selectedOfferingId={selectedOfferingId}
+                    onOfferingChange={setSelectedOfferingId}
+                    storeName={activeStore?.name}
+                    storeAddress={activeStore?.address}
+                    isLoadingOfferings={isLoadingOfferings}
+                    offeringError={offeringError}
+                    isSubmitting={isSubmitting}
                   />
                 </div>
               </motion.div>
@@ -937,6 +1078,14 @@ const Checkout = () => {
                     locationId={selectedLocationId}
                     isDelivery={deliveryMethod === 'delivery'}
                     onCheckout={handleCheckout}
+                    offerings={offerings}
+                    selectedOfferingId={selectedOfferingId}
+                    onOfferingChange={setSelectedOfferingId}
+                    storeName={activeStore?.name}
+                    storeAddress={activeStore?.address}
+                    isLoadingOfferings={isLoadingOfferings}
+                    offeringError={offeringError}
+                    isSubmitting={isSubmitting}
                   />
                 </div>
               </div>
@@ -955,4 +1104,3 @@ const Checkout = () => {
 };
 
 export default Checkout;
-

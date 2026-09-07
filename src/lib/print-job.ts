@@ -80,6 +80,28 @@ const getOrderFileUrl = (order: OrderDto): string | undefined => {
   return undefined;
 };
 
+const getOrderFileName = (order: OrderDto): string | undefined => {
+  const metadataName = readStringField(order.metadata?.primary_file_name)
+    ?? readStringField(order.metadata?.file_name);
+  if (metadataName) return metadataName;
+
+  for (const item of order.items ?? []) {
+    const customisation = item.customisation ?? {};
+    const itemName = readStringField(customisation.primary_file_name)
+      ?? readStringField(customisation.file_name);
+    if (itemName) return itemName;
+
+    const assets = customisation.uploaded_assets;
+    if (Array.isArray(assets)) {
+      const firstNamedAsset = assets.find((asset) => asset && typeof asset === "object" && readStringField((asset as Record<string, unknown>).name));
+      if (firstNamedAsset && typeof firstNamedAsset === "object") {
+        return readStringField((firstNamedAsset as Record<string, unknown>).name);
+      }
+    }
+  }
+  return undefined;
+};
+
 export const mapOrderToPrintJob = (
   order: OrderDto,
   productByStoreProductId?: StoreProductDisplayMap,
@@ -89,10 +111,14 @@ export const mapOrderToPrintJob = (
   const orderKind = getOrderKindFromItems(order, productByStoreProductId);
   const customerName = order.customer_id ? `Customer ${order.customer_id.slice(0, 8)}` : "Walk-in customer";
   const status = toPrintJobStatus(order.status);
+  const sourceFileName = getOrderFileName(order);
+  const itemSummary = summarizeOrderItems(order, productByStoreProductId);
 
   return {
     id: order.id,
-    fileName: `${summarizeOrderItems(order, productByStoreProductId)} · ${getOrderKindLabel(orderKind)}`,
+    fileName: orderKind === "print_job" && sourceFileName
+      ? `${sourceFileName} · ${itemSummary}`
+      : `${itemSummary} · ${getOrderKindLabel(orderKind)}`,
     status,
     totalPrice: order.total,
     currency: order.currency,

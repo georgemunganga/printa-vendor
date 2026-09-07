@@ -45,6 +45,11 @@ export const buildStoreProductDisplayMap = (
 };
 
 export const getOrderKindFromItems = (order: OrderDto, productByStoreProductId?: StoreProductDisplayMap): OrderKind => {
+  const explicitItemKind = order.items?.map((item) => item.customisation?.order_kind).find(
+    (value) => value === "print_job" || value === "retail_sale"
+  );
+  if (explicitItemKind === "print_job" || explicitItemKind === "retail_sale") return explicitItemKind;
+
   const notes = order.notes?.toUpperCase() ?? "";
   if (notes.includes("ORDER TYPE: RETAIL_SALE")) return "retail_sale";
   if (notes.includes("ORDER TYPE: PRINT_JOB")) return "print_job";
