@@ -16,6 +16,7 @@ import { operatingHoursService } from "@/services/operating-hours.service";
 import { inventoryService } from "@/services/inventory.service";
 import { defaultNotificationPreferences, notificationPreferencesService, type NotificationPreferencesDto } from "@/services/notification-preferences.service";
 import { defaultSecurityPreferences, securityPreferencesService, SESSION_TIMEOUT_OPTIONS, type SecurityPreferencesDto } from "@/services/security-preferences.service";
+import { defaultPrivacyPreferences, privacyPreferencesService, type PrivacyPreferencesDto } from "@/services/privacy-preferences.service";
 import type { OperatingHourDto, StoreDto } from "@/services/contracts";
 
 interface SettingCard {
@@ -82,9 +83,13 @@ const SettingsPage = () => {
   const [isSavingNotificationPreferences, setIsSavingNotificationPreferences] = useState(false);
   const [securityPreferences, setSecurityPreferences] = useState<SecurityPreferencesDto>(defaultSecurityPreferences);
   const [isSavingSecurityPreferences, setIsSavingSecurityPreferences] = useState(false);
+  const [privacyPreferences, setPrivacyPreferences] = useState<PrivacyPreferencesDto>(defaultPrivacyPreferences);
+  const [isLoadingPrivacyPreferences, setIsLoadingPrivacyPreferences] = useState(false);
+  const [isSavingPrivacyPreferences, setIsSavingPrivacyPreferences] = useState(false);
   const canEditStoreSettings = isOwner() || can("edit_store_settings");
   const canManageNotificationPreferences = isOwner() || can("manage_notifications") || can("manage_settings");
   const canManageSecurityPreferences = isOwner() || can("manage_settings");
+  const canManagePrivacyPreferences = isOwner() || can("manage_settings");
 
   useEffect(() => {
     if (!activeStore?.id) {
@@ -144,6 +149,24 @@ const SettingsPage = () => {
     setSecurityPreferences(securityPreferencesService.get(userId));
   }, [activeModal, userId]);
 
+  useEffect(() => {
+    if (activeModal !== "privacy" || !activeStore?.id || !userId) return;
+
+    let cancelled = false;
+    setIsLoadingPrivacyPreferences(true);
+    void privacyPreferencesService.get(userId, activeStore.id)
+      .then((preferences) => {
+        if (!cancelled) setPrivacyPreferences(preferences);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingPrivacyPreferences(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeModal, activeStore?.id, userId]);
+
   const openStoreSettings = () => {
     if (!activeStore) {
       toast.error("Select a store before managing store profile.");
@@ -183,6 +206,25 @@ const SettingsPage = () => {
       toast.error(error instanceof Error ? error.message : "Unable to save store profile.");
     } finally {
       setIsSavingStore(false);
+    }
+  };
+
+  const updatePrivacyPreference = (field: keyof PrivacyPreferencesDto, value: boolean) => {
+    setPrivacyPreferences((current) => ({ ...current, [field]: value }));
+  };
+
+  const savePrivacyPreferences = async () => {
+    if (!activeStore?.id || !userId || !canManagePrivacyPreferences) return;
+    setIsSavingPrivacyPreferences(true);
+    try {
+      const saved = await privacyPreferencesService.save(userId, activeStore.id, privacyPreferences);
+      setPrivacyPreferences(saved);
+      toast.success("Privacy preferences saved.");
+      setActiveModal(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save privacy preferences.");
+    } finally {
+      setIsSavingPrivacyPreferences(false);
     }
   };
 
@@ -785,45 +827,52 @@ const SettingsPage = () => {
             Privacy Settings
           </span>
         }
-        description="Privacy preferences are not yet configured for vendor accounts."
+        description={activeStore ? `Privacy preferences for ${activeStore.name}.` : "Select a store to manage privacy preferences."}
       >
-        <div className="space-y-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="analytics" className="text-sm font-medium">Usage Analytics</Label>
-              <p className="text-xs text-gray-500">Help us improve by sharing usage data</p>
+        {isLoadingPrivacyPreferences ? (
+          <div className="py-8 text-center text-sm text-gray-500">Loading privacy preferences…</div>
+        ) : (
+          <div className="space-y-4 py-2">
+            {[
+              { key: "usage_analytics" as const, title: "Usage analytics", body: "Share product usage data that helps improve vendor workflows." },
+              { key: "partner_sharing" as const, title: "Partner sharing", body: "Allow Printa to share required operational details with approved fulfillment partners." },
+              { key: "location_services" as const, title: "Location services", body: "Use this store’s location for routing, coverage, and nearby customer experiences." },
+              { key: "public_store_profile" as const, title: "Public store profile", body: "Allow this store’s name, city, hours, and contact details to appear on customer-facing pages." },
+            ].map((preference) => (
+              <div key={preference.key} className="flex items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-white p-4">
+                <div className="min-w-0">
+                  <Label htmlFor={preference.key} className="text-sm font-semibold text-gray-900">{preference.title}</Label>
+                  <p className="mt-1 text-xs leading-5 text-gray-500">{preference.body}</p>
+                </div>
+                <Switch
+                  id={preference.key}
+                  checked={privacyPreferences[preference.key]}
+                  onCheckedChange={(checked) => updatePrivacyPreference(preference.key, checked)}
+                  disabled={!canManagePrivacyPreferences || isSavingPrivacyPreferences}
+                  className="data-[state=checked]:bg-printa-red"
+                />
+              </div>
+            ))}
+            {!canManagePrivacyPreferences && (
+              <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">You can view privacy preferences, but only the owner can save changes.</p>
+            )}
+            <p className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">These preferences do not replace Vendor Terms or Privacy Notice acceptance. They are saved for this user and store and will sync with the API when server-side preference storage is available.</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setActiveModal(null)} className="rounded-xl" disabled={isSavingPrivacyPreferences}>
+                Close
+              </Button>
+              {canManagePrivacyPreferences && (
+                <Button
+                  className="bg-printa-red hover:bg-printa-red/90 rounded-xl"
+                  onClick={() => void savePrivacyPreferences()}
+                  disabled={isSavingPrivacyPreferences || !activeStore}
+                >
+                  {isSavingPrivacyPreferences ? "Saving…" : "Save preferences"}
+                </Button>
+              )}
             </div>
-            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="partners" className="text-sm font-medium">Share with Partners</Label>
-              <p className="text-xs text-gray-500">Allow data sharing with print partners</p>
-            </div>
-            <span className="text-xs font-medium text-gray-400">Not configured</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="location-track" className="text-sm font-medium">Location Services</Label>
-              <p className="text-xs text-gray-500">Allow location access for nearby printers</p>
-            </div>
-            <span className="text-xs font-medium text-gray-400">Not configured</span>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setActiveModal(null)} className="rounded-xl">
-            Cancel
-          </Button>
-          <Button
-            className="bg-printa-red hover:bg-printa-red/90 rounded-xl"
-            onClick={() => {
-              toast.error("Privacy preferences are not configured for vendor accounts yet.");
-              setActiveModal(null);
-            }}
-          >
-            Save changes
-          </Button>
-        </div>
+        )}
       </ResponsiveModal>
 
       {/* Currency Modal */}
