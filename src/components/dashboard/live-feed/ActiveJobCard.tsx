@@ -1,5 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   Play,
   CheckCircle,
@@ -8,6 +9,7 @@ import {
   Bike,
   MapPin,
   Package,
+  MessageCircle,
 } from "lucide-react";
 import { PrintJob } from "@/types";
 
@@ -81,7 +83,18 @@ export const ActiveJobCard: React.FC<ActiveJobCardProps> = ({
           {job.status === "delivered" && <CheckCircle size={10} />}
           {stage.label}
         </span>
-        <span className="text-xs text-gray-400 font-mono">{job.id}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="truncate text-xs text-gray-400 font-mono">{job.id}</span>
+          <Link
+            to={`/dashboard/chat/${job.id}`}
+            aria-label={`Open chat for ${job.fileName}`}
+            title="Chat with customer"
+            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-printa-red text-white shadow-sm transition hover:bg-printa-black focus:outline-none focus:ring-2 focus:ring-printa-red/30"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MessageCircle size={15} />
+          </Link>
+        </div>
       </div>
 
       {/* File info */}
@@ -149,6 +162,13 @@ export const ActiveJobCard: React.FC<ActiveJobCardProps> = ({
 
       {/* Actions */}
       <div className="flex items-center gap-2 border-t border-gray-100 pt-3">
+        <Link
+          to={`/dashboard/chat/${job.id}`}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-600 transition-colors hover:border-printa-red/40 hover:bg-printa-red/5 hover:text-printa-red"
+        >
+          <MessageCircle size={13} />
+          Chat
+        </Link>
         {job.status === "printing" && canStartPrint && (
           <button
             onClick={() => onStartPrint(job.id)}
