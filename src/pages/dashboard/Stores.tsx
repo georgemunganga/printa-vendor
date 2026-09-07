@@ -153,13 +153,12 @@ const StoresPage: React.FC = () => {
     }
   };
 
-  const handleOpenStore = async (store: StoreType) => {
+  const handleOpenStore = (store: StoreType) => {
     setSwitchingStoreId(store.id);
-    toast.loading(`Switching to ${store.name}...`);
+    const toastId = toast.loading(`Switching to ${store.name}...`);
     setActiveStore(store);
     setSwitchingStoreId(null);
-    toast.dismiss();
-    toast.success(`Switched to ${store.name}`);
+    toast.success(`Switched to ${store.name}`, { id: toastId });
     navigate("/dashboard/store");
   };
 
