@@ -48,9 +48,9 @@ interface POSRightOrderPanelProps extends OrderSummaryProps {
 }
 
 const paymentMethods = [
-  { id: "cash" as const, label: "Cash", icon: Banknote },
-  { id: "card" as const, label: "Debit Card", icon: CreditCard },
-  { id: "ewallet" as const, label: "E-Wallet", icon: Smartphone },
+  { id: "cash" as const, label: "Cash", icon: Banknote, enabled: true },
+  { id: "card" as const, label: "Debit Card", icon: CreditCard, enabled: false },
+  { id: "ewallet" as const, label: "E-Wallet", icon: Smartphone, enabled: true },
 ];
 
 export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
@@ -92,6 +92,7 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
   };
 
   const handleOpenPaymentModal = () => {
+    if (paymentMethod === "card") return;
     setShowPaymentModal(true);
   };
 
@@ -501,17 +502,28 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
               {paymentMethods.map((pm) => {
                 const Icon = pm.icon;
                 const active = paymentMethod === pm.id;
+                const disabled = !pm.enabled;
                 return (
                   <button
                     key={pm.id}
                     type="button"
-                    onClick={() => onPaymentMethodChange(pm.id)}
-                    className={`flex flex-col items-center gap-1 py-2.5 rounded-xl text-[10px] font-semibold transition ${
-                      active
+                    disabled={disabled}
+                    onClick={() => {
+                      if (!disabled) onPaymentMethodChange(pm.id);
+                    }}
+                    className={`relative flex flex-col items-center gap-1 rounded-xl py-2.5 text-[10px] font-semibold transition ${
+                      disabled
+                        ? "cursor-not-allowed bg-gray-50 text-gray-300 opacity-70"
+                        : active
                         ? "bg-printa-red text-white shadow-sm"
                         : "bg-gray-50 text-gray-400 hover:bg-gray-100"
                     }`}
                   >
+                    {disabled && (
+                      <span className="absolute -top-1 right-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-bold uppercase text-amber-700">
+                        Soon
+                      </span>
+                    )}
                     <Icon size={16} />
                     {pm.label}
                   </button>
@@ -522,9 +534,10 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
 
           <Button
             onClick={handleOpenPaymentModal}
-            className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold"
+            disabled={paymentMethod === "card"}
+            className="w-full bg-printa-red hover:bg-red-700 text-white rounded-xl h-11 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Place Order - K{total.toFixed(2)}
+            {paymentMethod === "card" ? "Debit Card Coming Soon" : `Place Order - K${total.toFixed(2)}`}
           </Button>
         </div>
       )}
