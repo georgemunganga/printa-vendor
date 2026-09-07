@@ -65,7 +65,7 @@ export interface BillingInvoiceDto {
 
 export const billingService = {
   listTiers() {
-    return api.get<SubscriptionTierDto[]>("/api/v1/billing/tiers");
+    return api.get<SubscriptionTierDto[]>("/api/v1/billing/tiers", { auth: false });
   },
 
   getSubscription(vendorId: string) {

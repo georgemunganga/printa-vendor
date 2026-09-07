@@ -1,166 +1,130 @@
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { AlertCircle, Check, RefreshCw } from "lucide-react";
+import { Layout } from "@/components/Layout";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { billingService, type SubscriptionTierDto } from "@/services/billing.service";
 
-import React from 'react';
-import { Layout } from '@/components/Layout';
-import { motion } from 'framer-motion';
-import { Check, AlertCircle } from 'lucide-react';
-import { 
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger 
-} from '@/components/ui/tooltip';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
+const formatPrice = (price: number) =>
+  `K${new Intl.NumberFormat("en-ZM", { maximumFractionDigits: 2 }).format(price)}`;
 
 const Pricing = () => {
-  const personalFeatures = [
-    'Upload from device or cloud',
-    'Multiple document formats',
-    'Basic print customization',
-    'Home delivery or pickup',
-    'Order tracking',
-    'Pay-as-you-go pricing'
-  ];
+  const [tiers, setTiers] = useState<SubscriptionTierDto[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const businessFeatures = [
-    'All Personal features',
-    'Bulk document printing',
-    'Custom corporate branding',
-    'Volume discounts',
-    'Dedicated account manager',
-    'Monthly billing options',
-    'API integration'
-  ];
+  const loadTiers = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const catalogue = await billingService.listTiers();
+      setTiers(
+        catalogue
+          .filter((tier) => tier.is_available)
+          .sort((a, b) => a.display_order - b.display_order),
+      );
+      setError(null);
+    } catch {
+      setTiers([]);
+      setError("Subscription plans could not be loaded. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTiers();
+  }, [loadTiers]);
 
   return (
     <Layout>
-      <motion.div 
+      <motion.main
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.5 }}
-        className="container mx-auto px-4 py-24"
+        className="container mx-auto px-4 py-16 md:py-24"
       >
-        <div className="max-w-4xl mx-auto text-center mb-16">
-          <h1 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Choose the plan that fits your needs. Whether you're an individual or a business, we have options for everyone.
+        <div className="mx-auto mb-12 max-w-3xl text-center md:mb-16">
+          <Badge className="mb-4 bg-red-50 text-printa-red hover:bg-red-50">Vendor plans</Badge>
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900 md:text-5xl">Simple pricing for your print shop</h1>
+          <p className="mx-auto mt-4 max-w-2xl text-base text-gray-600 md:text-lg">
+            Run your point of sale, inventory, team, and live Printa orders from one workspace. All prices are billed monthly in Zambian kwacha.
           </p>
         </div>
-        
-        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-          {/* Personal Plan */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.5 }}
-            className="bg-white rounded-xl shadow-lg overflow-hidden"
-          >
-            <div className="p-8 border-b">
-              <h3 className="text-2xl font-bold mb-2">Personal</h3>
-              <p className="text-gray-600 mb-4">Perfect for individuals and students</p>
-              <div className="flex items-baseline">
-                <span className="text-4xl font-bold">K0</span>
-                <span className="text-gray-500 ml-2">base fee</span>
+
+        {isLoading ? (
+          <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-2" aria-label="Loading subscription plans">
+            {[0, 1].map((item) => (
+              <div key={item} className="h-[430px] animate-pulse rounded-3xl border border-gray-100 bg-white p-7 shadow-sm">
+                <div className="h-7 w-28 rounded-lg bg-gray-100" />
+                <div className="mt-4 h-4 w-52 rounded bg-gray-100" />
+                <div className="mt-8 h-11 w-32 rounded-lg bg-gray-100" />
+                <div className="mt-9 space-y-4">
+                  {[0, 1, 2, 3, 4].map((line) => <div key={line} className="h-4 rounded bg-gray-100" />)}
+                </div>
               </div>
-              <p className="text-sm text-gray-500 mt-2">Pay only for what you print</p>
-            </div>
-            
-            <div className="p-8">
-              <ul className="space-y-4">
-                {personalFeatures.map((feature, index) => (
-                  <li key={index} className="flex items-start">
-                    <Check size={20} className="text-printa-red mr-2 flex-shrink-0 mt-0.5" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              
-              <Link to="/upload">
-                <Button className="w-full mt-8" size="lg">
-                  Start Printing
-                </Button>
-              </Link>
-            </div>
-          </motion.div>
-          
-          {/* Business Plan */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
-            className="bg-white rounded-xl shadow-lg overflow-hidden relative"
-          >
-            <div className="absolute top-4 right-4">
-              <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">
-                Coming Soon
-              </Badge>
-            </div>
-            
-            <div className="p-8 border-b">
-              <h3 className="text-2xl font-bold mb-2">For Business</h3>
-              <p className="text-gray-600 mb-4">Tailored for companies and organizations</p>
-              <div className="flex items-baseline">
-                <span className="text-4xl font-bold">Custom</span>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">Volume-based pricing</p>
-            </div>
-            
-            <div className="p-8">
-              <ul className="space-y-4">
-                {businessFeatures.map((feature, index) => (
-                  <li key={index} className="flex items-start">
-                    <Check size={20} className="text-printa-red mr-2 flex-shrink-0 mt-0.5" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="mt-8">
-                      <Button variant="outline" className="w-full" size="lg" disabled>
-                        Contact Sales
-                      </Button>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Business plans coming soon!</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </motion.div>
-        </div>
-        
-        <div className="mt-16 max-w-3xl mx-auto p-6 bg-gray-50 rounded-xl border border-gray-100">
-          <div className="flex items-start">
-            <AlertCircle size={24} className="text-printa-red mr-4 flex-shrink-0 mt-1" />
-            <div>
-              <h4 className="text-lg font-medium mb-2">Need a custom solution?</h4>
-              <p className="text-gray-600 mb-4">
-                We're developing tailored options for businesses of all sizes. Leave your email and we'll notify you when our business plans launch.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <input 
-                  type="email" 
-                  placeholder="Your email address" 
-                  className="printa-input flex-grow" 
-                />
-                <Button variant="default">
-                  Get Notified
-                </Button>
-              </div>
-            </div>
+            ))}
           </div>
+        ) : error ? (
+          <div className="mx-auto max-w-xl rounded-2xl border border-red-100 bg-red-50 p-6 text-center">
+            <AlertCircle className="mx-auto text-printa-red" size={28} />
+            <p className="mt-3 text-sm text-gray-700">{error}</p>
+            <Button onClick={() => void loadTiers()} variant="outline" className="mt-4 gap-2 border-red-200 text-printa-red hover:bg-white">
+              <RefreshCw size={16} /> Try again
+            </Button>
+          </div>
+        ) : tiers.length === 0 ? (
+          <div className="mx-auto max-w-xl rounded-2xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600">
+            No subscription plans are available right now. Please check again shortly.
+          </div>
+        ) : (
+          <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-2">
+            {tiers.map((tier, index) => (
+              <motion.article
+                key={tier.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.08 }}
+                className={`relative overflow-hidden rounded-3xl border bg-white shadow-sm ${tier.is_popular ? "border-printa-red shadow-red-100" : "border-gray-200"}`}
+              >
+                {tier.is_popular && (
+                  <div className="bg-printa-red px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-white">Most popular</div>
+                )}
+                <div className="p-7 md:p-8">
+                  <h2 className="text-2xl font-bold text-gray-900">{tier.name}</h2>
+                  <p className="mt-2 min-h-10 text-sm leading-5 text-gray-500">{tier.description}</p>
+                  <div className="mt-7 flex items-end gap-2">
+                    <span className="text-4xl font-bold tracking-tight text-gray-900">{formatPrice(tier.monthly_price)}</span>
+                    <span className="pb-1 text-sm text-gray-500">/ month</span>
+                  </div>
+                  <ul className="mt-8 space-y-3">
+                    {tier.features.filter((feature) => feature.included).map((feature) => (
+                      <li key={feature.text} className="flex items-start gap-3 text-sm text-gray-700">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-50 text-printa-red"><Check size={13} /></span>
+                        {feature.text}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/signup" className="mt-8 block">
+                    <Button className={`h-12 w-full rounded-xl font-semibold ${tier.is_popular ? "bg-printa-red hover:bg-printa-red/90" : "bg-gray-900 hover:bg-gray-800"}`}>
+                      Start with {tier.name}
+                    </Button>
+                  </Link>
+                </div>
+              </motion.article>
+            ))}
+          </div>
+        )}
+
+        <div className="mx-auto mt-12 max-w-3xl rounded-2xl border border-gray-100 bg-gray-50 p-5 text-center">
+          <p className="text-sm leading-6 text-gray-600">
+            Already have a vendor account? <Link to="/login" className="font-semibold text-printa-red hover:underline">Sign in</Link> to view your current plan, invoices, and payment status.
+          </p>
         </div>
-      </motion.div>
+      </motion.main>
     </Layout>
   );
 };
 
 export default Pricing;
-
-
