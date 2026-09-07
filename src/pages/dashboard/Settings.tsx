@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Bell, Lock, Shield, DollarSign, Smartphone, Check, Clock, LogOut, Store, Package, Building2, MapPin } from "lucide-react";
+import { Bell, Lock, Shield, DollarSign, Smartphone, Check, Clock, LogOut, Store, Package, Building2, MapPin, Download, MonitorSmartphone } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,11 @@ const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satur
 
 const createEmptyOperatingHours = (): OperatingHourDto[] =>
   WEEKDAYS.map((_, day) => ({ day_of_week: day, is_open: false }));
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+}
 
 interface StoreSettingsForm {
   name: string;
@@ -86,6 +91,8 @@ const SettingsPage = () => {
   const [privacyPreferences, setPrivacyPreferences] = useState<PrivacyPreferencesDto>(defaultPrivacyPreferences);
   const [isLoadingPrivacyPreferences, setIsLoadingPrivacyPreferences] = useState(false);
   const [isSavingPrivacyPreferences, setIsSavingPrivacyPreferences] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isStandaloneApp, setIsStandaloneApp] = useState(false);
   const canEditStoreSettings = isOwner() || can("edit_store_settings");
   const canManageNotificationPreferences = isOwner() || can("manage_notifications") || can("manage_settings");
   const canManageSecurityPreferences = isOwner() || can("manage_settings");
@@ -125,6 +132,28 @@ const SettingsPage = () => {
       cancelled = true;
     };
   }, [activeStore?.id, activeStore?.name, activeStore?.address, activeStore?.phone, activeStore?.email]);
+
+  useEffect(() => {
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+    setIsStandaloneApp(standalone);
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+
+    const handleInstalled = () => {
+      setInstallPrompt(null);
+      setIsStandaloneApp(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
+  }, []);
 
   useEffect(() => {
     if (activeModal !== "notifications" || !activeStore?.id || !userId) return;
@@ -206,6 +235,28 @@ const SettingsPage = () => {
       toast.error(error instanceof Error ? error.message : "Unable to save store profile.");
     } finally {
       setIsSavingStore(false);
+    }
+  };
+
+  const installApp = async () => {
+    if (isStandaloneApp) {
+      toast.info("Printa is already installed on this device.");
+      return;
+    }
+
+    if (!installPrompt) {
+      toast.info("Use your browser menu to install or add Printa to your home screen.");
+      return;
+    }
+
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    setInstallPrompt(null);
+    if (choice.outcome === "accepted") {
+      setIsStandaloneApp(true);
+      toast.success("Printa app installed.");
+    } else {
+      toast.info("Install cancelled.");
     }
   };
 
@@ -499,8 +550,8 @@ const SettingsPage = () => {
                   <Smartphone size={18} className="text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">Download</p>
-                  <p className="text-sm text-white">Download the Printa app from Google Play or the App Store.</p>
+                  <p className="text-sm font-semibold text-white">Install app</p>
+                  <p className="text-sm text-white">Install this portal on your device for faster access.</p>
                 </div>
               </div>
               <Button
@@ -508,7 +559,7 @@ const SettingsPage = () => {
                 className={`text-sm font-semibold bg-white  text-printa-red`}
                 onClick={() => setActiveModal("download")}
               >
-                Download Now
+                {isStandaloneApp ? "Installed" : "Install"}
               </Button>
             </div>
         </div>
@@ -923,48 +974,41 @@ const SettingsPage = () => {
         title={
           <span className="flex items-center gap-2">
             <Smartphone size={20} className="text-printa-red" />
-            Download Printa app
+            Install Printa app
           </span>
         }
-        description="Get the mobile app when it is available."
+        description="Install this vendor portal on your phone, tablet, or desktop."
       >
-        <div className="space-y-3 py-4">
-          <button
-            type="button"
-            className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-300 transition-colors"
-            onClick={() => {
-              window.open("https://play.google.com/store", "_blank");
-              toast.success("Opening Google Play…");
-            }}
-          >
-            <div className="w-12 h-12 rounded-xl bg-black flex items-center justify-center">
-              <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor">
-                <path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.61 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.5,12.92 20.16,13.19L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z" />
-              </svg>
+        <div className="space-y-4 py-2">
+          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-printa-red/10 text-printa-red">
+              {isStandaloneApp ? <Check size={24} /> : <MonitorSmartphone size={24} />}
             </div>
-            <div className="text-left">
-              <p className="text-xs text-gray-500">GET IT ON</p>
-              <p className="text-sm font-semibold text-gray-900">Google Play</p>
+            <p className="mt-3 text-sm font-semibold text-gray-900">{isStandaloneApp ? "Printa is installed" : installPrompt ? "Ready to install" : "Install from your browser"}</p>
+            <p className="mt-1 text-xs leading-5 text-gray-500">{isStandaloneApp ? "You are already using the installed app experience." : installPrompt ? "This browser can install Printa directly." : "If the install button is not available, use your browser menu and choose Install app or Add to Home Screen."}</p>
+          </div>
+
+          {!isStandaloneApp && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                <p className="text-sm font-semibold text-gray-900">Android or desktop Chrome</p>
+                <p className="mt-1 text-xs leading-5 text-gray-500">Open the browser menu and choose Install app if the button below is not available.</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                <p className="text-sm font-semibold text-gray-900">iPhone or iPad Safari</p>
+                <p className="mt-1 text-xs leading-5 text-gray-500">Tap Share, then choose Add to Home Screen.</p>
+              </div>
             </div>
-          </button>
-          <button
-            type="button"
-            className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-300 transition-colors"
-            onClick={() => {
-              window.open("https://apps.apple.com", "_blank");
-              toast.success("Opening the App Store…");
-            }}
-          >
-            <div className="w-12 h-12 rounded-xl bg-black flex items-center justify-center">
-              <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor">
-                <path d="M18.71,19.5C17.88,20.74 17,21.95 15.66,21.97C14.32,22 13.89,21.18 12.37,21.18C10.84,21.18 10.37,21.95 9.1,22C7.79,22.05 6.8,20.68 5.96,19.47C4.25,17 2.94,12.45 4.7,9.39C5.57,7.87 7.13,6.91 8.82,6.88C10.1,6.86 11.32,7.75 12.11,7.75C12.89,7.75 14.37,6.68 15.92,6.84C16.57,6.87 18.39,7.1 19.56,8.82C19.47,8.88 17.39,10.1 17.41,12.63C17.44,15.65 20.06,16.66 20.09,16.67C20.06,16.74 19.67,18.11 18.71,19.5M13,3.5C13.73,2.67 14.94,2.04 15.94,2C16.07,3.17 15.6,4.35 14.9,5.19C14.21,6.04 13.07,6.7 11.95,6.61C11.8,5.46 12.36,4.26 13,3.5Z" />
-              </svg>
-            </div>
-            <div className="text-left">
-              <p className="text-xs text-gray-500">Download on the</p>
-              <p className="text-sm font-semibold text-gray-900">App Store</p>
-            </div>
-          </button>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setActiveModal(null)} className="rounded-xl">Close</Button>
+            {!isStandaloneApp && (
+              <Button className="rounded-xl bg-printa-red hover:bg-printa-red/90" onClick={() => void installApp()}>
+                <Download size={16} className="mr-2" /> Install app
+              </Button>
+            )}
+          </div>
         </div>
       </ResponsiveModal>
     </DashboardLayout>
