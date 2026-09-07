@@ -83,8 +83,40 @@ const iconForCategory = (category?: string): LucideIcon => {
   return Package;
 };
 
-const getInventorySource = (product?: PlatformProductDto): InventorySource =>
-  product?.attributes?.inventory_source === "custom" ? "custom" : "printa";
+const PRINT_TERMS = [
+  "print",
+  "paper",
+  "poster",
+  "flyer",
+  "business card",
+  "photo",
+  "binding",
+  "lamination",
+  "banner",
+  "sticker",
+  "label",
+  "booklet",
+  "document",
+];
+
+const hasPrintTerms = (product: PlatformProductDto): boolean => {
+  const text = `${product.name} ${product.category} ${product.description ?? ""}`.toLowerCase();
+  return PRINT_TERMS.some((term) => text.includes(term));
+};
+
+const getInventorySource = (product?: PlatformProductDto): InventorySource => {
+  if (!product) return "custom";
+
+  const source = product.attributes?.inventory_source;
+  if (source === "custom") return "custom";
+  if (source === "printa") return "printa";
+
+  const hasVendorOwnership = Boolean(product.attributes?.vendor_id || product.attributes?.store_id);
+  const hasCustomSku = product.sku?.toUpperCase().startsWith("CUSTOM-") ?? false;
+  if (hasVendorOwnership || hasCustomSku) return "custom";
+
+  return hasPrintTerms(product) ? "printa" : "custom";
+};
 
 const toInventoryProduct = (storeProduct: VendorStoreProductDto, catalogueById: Map<string, PlatformProductDto>): Product => {
   const platformProduct = catalogueById.get(storeProduct.platform_product_id);
