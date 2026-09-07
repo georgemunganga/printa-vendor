@@ -10,6 +10,9 @@ import { billingService, type SubscriptionTierDto } from "@/services/billing.ser
 const formatPrice = (price: number) =>
   `K${new Intl.NumberFormat("en-ZM", { maximumFractionDigits: 2 }).format(price)}`;
 
+const formatTierName = (name: string) =>
+  name.toLowerCase().replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+
 const Pricing = () => {
   const [tiers, setTiers] = useState<SubscriptionTierDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,7 +95,7 @@ const Pricing = () => {
                   <div className="bg-printa-red px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-white">Most popular</div>
                 )}
                 <div className="p-7 md:p-8">
-                  <h2 className="text-2xl font-bold text-gray-900">{tier.name}</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">{formatTierName(tier.name)}</h2>
                   <p className="mt-2 min-h-10 text-sm leading-5 text-gray-500">{tier.description}</p>
                   <div className="mt-7 flex items-end gap-2">
                     <span className="text-4xl font-bold tracking-tight text-gray-900">{formatPrice(tier.monthly_price)}</span>
@@ -108,7 +111,7 @@ const Pricing = () => {
                   </ul>
                   <Link to="/signup" className="mt-8 block">
                     <Button className={`h-12 w-full rounded-xl font-semibold ${tier.is_popular ? "bg-printa-red hover:bg-printa-red/90" : "bg-gray-900 hover:bg-gray-800"}`}>
-                      Start with {tier.name}
+                      Start with {formatTierName(tier.name)}
                     </Button>
                   </Link>
                 </div>

@@ -54,6 +54,7 @@ test.describe("authenticated vendor session", () => {
           .filter({ hasText: new RegExp(`^${heading}$`, "i") })
           .first(),
       ).toBeVisible();
+      await page.waitForLoadState("networkidle");
       await expect(page.getByText(/sql:|Something went wrong|is not defined/i)).toHaveCount(0);
     }
 
@@ -92,6 +93,7 @@ test.describe("authenticated vendor session", () => {
       await page.goto(route);
       await expect(page).toHaveURL(new RegExp(`${route.replaceAll("/", "\\/")}$`));
       await expect(page.locator("h1:visible").first()).toBeVisible();
+      await page.waitForLoadState("networkidle");
       await expect(page.getByText(/sql:|Something went wrong|is not defined/i)).toHaveCount(0);
     }
 

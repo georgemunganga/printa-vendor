@@ -7,6 +7,16 @@ test("loads the vendor frontend", async ({ page }) => {
   await expect(page.locator("#root")).toBeVisible();
 });
 
+test("shows the live public vendor plans", async ({ page }) => {
+  await page.goto("/pricing");
+
+  await expect(page.getByRole("heading", { name: "Pro", exact: true })).toBeVisible();
+  await expect(page.getByText("K500", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Enterprise", exact: true })).toBeVisible();
+  await expect(page.getByText("K1,500", { exact: true })).toBeVisible();
+  await expect(page.getByText(/coming soon/i)).toHaveCount(0);
+});
+
 test("local-test proxy reaches the live API health endpoint", async ({ request }) => {
   const response = await request.get("/readyz");
   expect(response.ok()).toBe(true);
