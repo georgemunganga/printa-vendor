@@ -46,14 +46,9 @@ export const privacyPreferencesService = {
   },
 
   async save(userId: string, storeId: string, preferences: PrivacyPreferencesDto): Promise<PrivacyPreferencesDto> {
-    writeLocal(userId, storeId, preferences);
-    try {
-      const remote = await api.put<PrivacyPreferencesDto>("/api/v1/vendor/privacy-preferences", preferences, { query: { store_id: storeId } });
-      const saved = { ...defaultPrivacyPreferences, ...remote };
-      writeLocal(userId, storeId, saved);
-      return saved;
-    } catch {
-      return preferences;
-    }
+    const remote = await api.put<PrivacyPreferencesDto>("/api/v1/vendor/privacy-preferences", preferences, { query: { store_id: storeId } });
+    const saved = { ...defaultPrivacyPreferences, ...remote };
+    writeLocal(userId, storeId, saved);
+    return saved;
   },
 };

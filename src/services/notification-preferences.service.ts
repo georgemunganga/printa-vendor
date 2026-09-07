@@ -50,14 +50,9 @@ export const notificationPreferencesService = {
   },
 
   async save(userId: string, storeId: string, preferences: NotificationPreferencesDto): Promise<NotificationPreferencesDto> {
-    writeLocal(userId, storeId, preferences);
-    try {
-      const remote = await api.put<NotificationPreferencesDto>("/api/v1/notifications/preferences", preferences, { query: { store_id: storeId } });
-      const saved = { ...defaultNotificationPreferences, ...remote };
-      writeLocal(userId, storeId, saved);
-      return saved;
-    } catch {
-      return preferences;
-    }
+    const remote = await api.put<NotificationPreferencesDto>("/api/v1/notifications/preferences", preferences, { query: { store_id: storeId } });
+    const saved = { ...defaultNotificationPreferences, ...remote };
+    writeLocal(userId, storeId, saved);
+    return saved;
   },
 };
