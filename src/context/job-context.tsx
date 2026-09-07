@@ -52,6 +52,7 @@ const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
     deliveryType: order.delivery_address ? "rider" : "pickup",
     orderChannel: order.channel === "POS" ? "walk-in" : "online",
     notes: order.notes,
+    backendStatus: order.status,
     statusHistory: [{ status, timestamp: new Date(order.updated_at) }],
   };
 };
@@ -103,6 +104,20 @@ const JobProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const persistStatus = useCallback(
     async (id: string, status: OrderStatusDto, errorMessage: string) => {
+      const current = jobs.find((job) => job.id === id);
+      if (!current) return;
+      if (current.backendStatus === status) {
+        toast.info("This job is already at that stage.");
+        return;
+      }
+      if (status === "IN_PRODUCTION" && current.backendStatus !== "CONFIRMED") {
+        toast.error(current.backendStatus === "IN_PRODUCTION" ? "Print job is already in production." : "Accept this job before starting production.");
+        return;
+      }
+      if (status === "READY" && current.backendStatus !== "IN_PRODUCTION") {
+        toast.error(current.backendStatus === "READY" ? "This job is already ready." : "Start production before marking this job ready.");
+        return;
+      }
       try {
         const updated = await ordersService.updateStatus(id, status);
         replaceLiveOrder(updated);
@@ -110,7 +125,7 @@ const JobProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         toast.error(error instanceof Error ? error.message : errorMessage);
       }
     },
-    [replaceLiveOrder],
+    [jobs, replaceLiveOrder],
   );
 
   const acceptJob = useCallback(

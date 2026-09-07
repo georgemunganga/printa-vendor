@@ -91,9 +91,9 @@ const JobDetailsV2Page = () => {
   }
 
   const statusInfo = statusConfig[order.status] ?? statusConfig.pending;
-  const canAccept = order.status === "pending";
-  const canStart = order.status === "printing";
-  const canMarkReady = order.status === "printing";
+  const canAccept = order.backendStatus === "PENDING";
+  const canStart = order.backendStatus === "CONFIRMED";
+  const canMarkReady = order.backendStatus === "IN_PRODUCTION";
   const slaLabel = getSlaLabel(order);
 
   // Format price

@@ -109,9 +109,9 @@ const JobDetailsPage = () => {
   }
 
   const statusInfo = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending;
-  const canAccept = order.status === "pending";
-  const canStart = order.status === "printing";
-  const canMarkReady = order.status === "printing";
+  const canAccept = order.backendStatus === "PENDING";
+  const canStart = order.backendStatus === "CONFIRMED";
+  const canMarkReady = order.backendStatus === "IN_PRODUCTION";
   const slaLabel = getSlaLabel(order);
   const slaProgress = getSlaProgress(order);
 
