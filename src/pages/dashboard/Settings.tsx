@@ -63,7 +63,7 @@ const toStoreForm = (store: StoreDto): StoreSettingsForm => ({
 });
 
 const SettingsPage = () => {
-  const { selectedCurrency, availableCurrencies } = useCurrencyContext();
+  const { selectedCurrency, availableCurrencies, setSelectedCurrency } = useCurrencyContext();
   const { logout, can, isOwner, user } = useAuth();
   const userId = user?.id;
   const { activeStore, setActiveStore, refreshStores } = useStore();
@@ -775,9 +775,10 @@ const SettingsPage = () => {
             Select Currency
           </span>
         }
-        description="Currency preferences are not yet stored on vendor accounts."
+        description="Choose the default currency shown when a record does not already include one."
       >
         <div className="space-y-2 py-4">
+          <p className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">Existing orders, invoices, products, and payments keep their recorded currency. This setting controls the fallback display currency.</p>
           {availableCurrencies.map((currency) => (
             <button
               key={currency.code}
@@ -788,7 +789,9 @@ const SettingsPage = () => {
                   : "border-gray-200 hover:border-gray-300"
               }`}
               onClick={() => {
-                toast.error("Currency preferences are not configured. Invoices and product prices use their recorded currency.");
+                setSelectedCurrency(currency);
+                toast.success(`Default currency set to ${currency.code}.`);
+                setActiveModal(null);
               }}
             >
               <div className="text-left">
