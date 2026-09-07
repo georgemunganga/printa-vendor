@@ -1,4 +1,5 @@
 export type PrintJobStatus = "pending" | "printing" | "ready" | "delivered" | "cancelled";
+export type OrderKind = "print_job" | "retail_sale";
 
 export interface Printer {
   name: string;
@@ -37,6 +38,7 @@ export interface PrintJob {
   customerEmail?: string;
   notes?: string;
   backendStatus?: string;
+  orderKind?: OrderKind;
 }
 
 // ========== Role & Permission System ==========

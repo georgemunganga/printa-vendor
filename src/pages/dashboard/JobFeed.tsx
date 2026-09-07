@@ -22,6 +22,7 @@ import { PrintJob } from "@/types";
 import { Button } from "@/components/ui/button";
 import { ordersService } from "@/services/orders.service";
 import type { OrderDto, OrderStatusDto } from "@/services/contracts";
+import { getOrderKind } from "@/lib/order-kind";
 
 /* ─── Channel filter ─── */
 type ChannelFilter = "all" | "online" | "walk-in";
@@ -66,19 +67,22 @@ const toPrintJobStatus = (status: OrderStatusDto): PrintJob["status"] => {
 
 const toPrintJob = (order: OrderDto): PrintJob => {
   const itemCount = order.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 1;
+  const orderKind = getOrderKind(order);
   return {
     id: order.id,
-    fileName: `${order.order_number}${order.channel === "POS" ? " · POS sale" : ""}`,
+    fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status: toPrintJobStatus(order.status),
     totalPrice: order.total,
     pageCount: itemCount,
     copies: itemCount,
     colorMode: "color",
-    printer: { name: order.channel === "POS" ? "Walk-in till" : "Production queue" },
+    printer: { name: orderKind === "print_job" ? "Production queue" : "Walk-in till" },
     createdAt: new Date(order.created_at),
     lastUpdated: new Date(order.updated_at),
     notes: order.notes,
     orderChannel: order.channel === "POS" ? "walk-in" : "online",
+    backendStatus: order.status,
+    orderKind,
   };
 };
 
@@ -86,6 +90,8 @@ const toPrintJob = (order: OrderDto): PrintJob => {
 const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
   const config = statusConfig[order.status] ?? statusConfig.pending;
   const isOnline = order.orderChannel === "online" || !order.orderChannel;
+  const isPrintJob = order.orderKind !== "retail_sale";
+  const KindIcon = isPrintJob ? FileText : Store;
 
   return (
     <Link
@@ -94,12 +100,20 @@ const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
     >
       {/* Top row: channel badge + status */}
       <div className="flex items-center justify-between mb-3">
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-          isOnline ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"
-        }`}>
-          {isOnline ? <Globe size={10} /> : <Store size={10} />}
-          {isOnline ? "Online" : "Walk-in"}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+            isOnline ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"
+          }`}>
+            {isOnline ? <Globe size={10} /> : <Store size={10} />}
+            {isOnline ? "Online" : "Walk-in"}
+          </span>
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+            isPrintJob ? "bg-red-50 text-printa-red" : "bg-gray-100 text-gray-600"
+          }`}>
+            <KindIcon size={10} />
+            {isPrintJob ? "Print job" : "Till sale"}
+          </span>
+        </div>
         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ${config.badge}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
           {config.label}
@@ -111,7 +125,9 @@ const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
 
       {/* Details */}
       <p className="text-xs text-gray-400 mt-1">
-        {order.pageCount} pg · {order.copies} {order.copies === 1 ? "copy" : "copies"} · {order.colorMode === "color" ? "Color" : "B&W"}
+        {isPrintJob
+          ? `${order.pageCount} pg · ${order.copies} ${order.copies === 1 ? "copy" : "copies"} · ${order.colorMode === "color" ? "Color" : "B&W"}`
+          : `${order.copies} ${order.copies === 1 ? "item" : "items"} · POS till sale`}
       </p>
 
       {/* Customer */}

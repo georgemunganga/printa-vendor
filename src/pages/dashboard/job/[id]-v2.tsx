@@ -91,9 +91,10 @@ const JobDetailsV2Page = () => {
   }
 
   const statusInfo = statusConfig[order.status] ?? statusConfig.pending;
-  const canAccept = order.backendStatus === "PENDING";
-  const canStart = order.backendStatus === "CONFIRMED";
-  const canMarkReady = order.backendStatus === "IN_PRODUCTION";
+  const isPrintJob = order.orderKind !== "retail_sale";
+  const canAccept = isPrintJob && order.backendStatus === "PENDING";
+  const canStart = isPrintJob && order.backendStatus === "CONFIRMED";
+  const canMarkReady = isPrintJob && order.backendStatus === "IN_PRODUCTION";
   const slaLabel = getSlaLabel(order);
 
   // Format price
@@ -103,7 +104,7 @@ const JobDetailsV2Page = () => {
   }).format(order.totalPrice);
 
   return (
-    <DashboardLayout pageTitle={`Order ${order.id}`}>
+    <DashboardLayout pageTitle={`${isPrintJob ? "Print Job" : "Till Sale"} ${order.id}`}>
       <div className="max-w-5xl mx-auto">
         {/* Header Section - Order ID & Price */}
         <motion.div
@@ -191,7 +192,9 @@ const JobDetailsV2Page = () => {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold truncate">{order.fileName}</p>
                     <p className="text-sm text-red-100">
-                      {order.pageCount} pages • {order.colorMode === "color" ? "Color" : "B&W"}
+                      {isPrintJob
+                        ? `${order.pageCount} pages • ${order.colorMode === "color" ? "Color" : "B&W"}`
+                        : `${order.copies} ${order.copies === 1 ? "item" : "items"} • POS till sale`}
                     </p>
                   </div>
                 </div>
@@ -221,7 +224,7 @@ const JobDetailsV2Page = () => {
               className="bg-white rounded-3xl border-2 border-gray-100 p-6 md:p-8"
             >
               <h2 className="text-lg font-semibold text-gray-900 mb-6">
-                Print Specifications
+                {isPrintJob ? "Print Specifications" : "Sale Details"}
               </h2>
 
               <div className="grid grid-cols-2 gap-4">
@@ -515,7 +518,7 @@ const JobDetailsV2Page = () => {
               className="h-14 text-base font-semibold"
             >
               <CheckCircle2 className="w-5 h-5 mr-2" />
-              Accept Order
+              {isPrintJob ? "Accept Order" : "Sale Recorded"}
             </Button>
 
             <Button

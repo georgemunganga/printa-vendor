@@ -13,6 +13,7 @@ import { motion } from "framer-motion";
 import { useStore } from "@/context/store-context";
 import { ordersService } from "@/services/orders.service";
 import type { OrderDto, OrderStatusDto } from "@/services/contracts";
+import { getOrderKind } from "@/lib/order-kind";
 
 type DashboardOrder = {
   id: string;
@@ -26,6 +27,7 @@ type DashboardOrder = {
   dueDate?: string;
   estimatedDelivery?: Date;
   createdAt: Date;
+  orderKind: "print_job" | "retail_sale";
 };
 
 const statusMeta: Record<DashboardOrder["status"], { label: string; accent: string }> = {
@@ -79,20 +81,22 @@ const toDashboardStatus = (status: OrderStatusDto): DashboardOrder["status"] => 
 
 const mapOrder = (order: OrderDto): DashboardOrder => {
   const copies = order.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+  const orderKind = getOrderKind(order);
   const createdAt = new Date(order.created_at);
   const updatedAt = new Date(order.updated_at);
   return {
     id: order.id,
-    fileName: order.order_number,
+    fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status: toDashboardStatus(order.status),
     totalPrice: order.total,
     pageCount: copies,
     copies,
     colorMode: "color",
-    printer: { name: order.channel === "POS" ? "Walk-in Queue" : "Production queue" },
+    printer: { name: orderKind === "print_job" ? "Production queue" : "Walk-in till" },
     dueDate: order.status === "READY" ? "Ready now" : undefined,
     estimatedDelivery: order.status === "READY" || order.status === "IN_PRODUCTION" ? updatedAt : undefined,
     createdAt,
+    orderKind,
   };
 };
 
@@ -142,7 +146,7 @@ const Dashboard = () => {
   const statCards = useMemo(
     () => [
       {
-        label: "Jobs in Queue",
+        label: "Print Jobs in Queue",
         value: `${pendingCount + inFlight}`,
         detail: `${pendingCount} awaiting acceptance`,
         icon: <Clock size={20} className="text-printa-red" />,
@@ -156,12 +160,12 @@ const Dashboard = () => {
       {
         label: "Throughput",
         value: `${throughput} copies`,
-        detail: `${totalOrders} jobs executed`,
+        detail: `${totalOrders} orders recorded`,
         icon: <Package size={20} className="text-printa-red" />,
       },
       {
         label: "Earnings (7d)",
-        value: `$${totalEarnings.toFixed(2)}`,
+        value: `K${totalEarnings.toFixed(2)}`,
         detail: `${slaConfidence}% SLA compliance`,
         icon: <Shield size={20} className="text-printa-red" />,
       },
@@ -202,10 +206,10 @@ const Dashboard = () => {
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                   Orders
                 </p>
-                <h2 className="text-xl font-semibold text-gray-900">Kitchen Queue</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Production Queue</h2>
               </div>
               <div className="text-sm font-medium text-gray-500">
-                {isLoading ? "Loading..." : `${totalOrders} jobs`}
+                {isLoading ? "Loading..." : `${totalOrders} orders`}
               </div>
             </div>
             <div className="space-y-3">
@@ -231,14 +235,14 @@ const Dashboard = () => {
                           {status.label}
                         </span>
                         <span className="text-sm font-semibold text-gray-900">
-                          ${order.totalPrice.toFixed(2)}
+                          K{order.totalPrice.toFixed(2)}
                         </span>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-500">
                         <FileText size={16} className="text-gray-300" />
                         <span className="font-medium text-gray-900">{order.fileName}</span>
                         <span>·</span>
-                        <span>{order.pageCount} pages · {order.copies} copies</span>
+                        <span>{order.orderKind === "print_job" ? `${order.pageCount} pages · ${order.copies} copies` : `${order.copies} items`}</span>
                         <span>·</span>
                         <span>{order.colorMode === "color" ? "Color" : "B&W"}</span>
                       </div>
@@ -253,15 +257,23 @@ const Dashboard = () => {
                         <div>SLA target: 4h</div>
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-printa-red transition hover:bg-printa-red/5">
-                          Accept
-                        </button>
-                        <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500">
-                          Start Production
-                        </button>
-                        <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500">
-                          Mark Ready
-                        </button>
+                        {order.orderKind === "print_job" ? (
+                          <>
+                            <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-printa-red transition hover:bg-printa-red/5">
+                              Accept
+                            </button>
+                            <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500">
+                              Start Production
+                            </button>
+                            <button className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500">
+                              Mark Ready
+                            </button>
+                          </>
+                        ) : (
+                          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                            Till sale recorded
+                          </span>
+                        )}
                       </div>
                     </motion.div>
                   );

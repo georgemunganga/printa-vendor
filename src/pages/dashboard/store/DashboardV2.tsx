@@ -14,6 +14,7 @@ import { IncomingJobCard } from "@/components/dashboard/live-feed/IncomingJobCar
 import { ActiveJobCard } from "@/components/dashboard/live-feed/ActiveJobCard";
 import { useStore } from "@/context/store-context";
 import { ordersService } from "@/services/orders.service";
+import { getOrderKind } from "@/lib/order-kind";
 
 const addHistory = (job: PrintJob, status: PrintJobStatus) => {
   const history = job.statusHistory ? [...job.statusHistory] : [];
@@ -39,15 +40,16 @@ const toPrintJobStatus = (status: OrderStatusDto): PrintJobStatus => {
 const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
   const items = order.items ?? [];
   const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
+  const orderKind = getOrderKind(order);
   return {
     id: order.id,
-    fileName: order.order_number,
+    fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status: toPrintJobStatus(order.status),
     totalPrice: order.total,
     pageCount: copies,
     copies,
     colorMode: "color",
-    printer: { name: "Production queue" },
+    printer: { name: orderKind === "print_job" ? "Production queue" : "Walk-in till" },
     createdAt: new Date(order.created_at),
     lastUpdated: new Date(order.updated_at),
     customerName: order.customer_id ? `Customer ${order.customer_id.slice(0, 8)}` : "Walk-in customer",
@@ -55,6 +57,7 @@ const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
     orderChannel: order.channel === "POS" ? "walk-in" : "online",
     notes: order.notes,
     backendStatus: order.status,
+    orderKind,
     statusHistory: [{ status: toPrintJobStatus(order.status), timestamp: new Date(order.updated_at) }],
   };
 };
@@ -82,7 +85,7 @@ const DashboardV2: React.FC = () => {
       try {
         const orders = await ordersService.listByStore(activeStore.id);
         if (!cancelled) {
-          setJobs(orders.map(mapOrderToPrintJob));
+          setJobs(orders.map(mapOrderToPrintJob).filter((job) => job.orderKind === "print_job"));
         }
       } catch {
         if (!cancelled) {
@@ -289,7 +292,7 @@ const DashboardV2: React.FC = () => {
   );
 
   return (
-    <DashboardLayout pageTitle="Live Orders">
+    <DashboardLayout pageTitle="Production Queue">
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -310,7 +313,7 @@ const DashboardV2: React.FC = () => {
             isOnline={isOnline}
             onToggleOnline={() => {
               setIsOnline((p) => !p);
-              toast(isOnline ? "You are now offline" : "You are now accepting jobs");
+              toast(isOnline ? "You are now offline" : "You are now accepting print jobs");
             }}
             soundEnabled={soundEnabled}
             onToggleSound={() => setSoundEnabled((p) => !p)}

@@ -109,9 +109,10 @@ const JobDetailsPage = () => {
   }
 
   const statusInfo = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending;
-  const canAccept = order.backendStatus === "PENDING";
-  const canStart = order.backendStatus === "CONFIRMED";
-  const canMarkReady = order.backendStatus === "IN_PRODUCTION";
+  const isPrintJob = order.orderKind !== "retail_sale";
+  const canAccept = isPrintJob && order.backendStatus === "PENDING";
+  const canStart = isPrintJob && order.backendStatus === "CONFIRMED";
+  const canMarkReady = isPrintJob && order.backendStatus === "IN_PRODUCTION";
   const slaLabel = getSlaLabel(order);
   const slaProgress = getSlaProgress(order);
 
@@ -128,7 +129,7 @@ const JobDetailsPage = () => {
   const statusIdx = TIMELINE_STEPS.findIndex((s) => s.key === order.status);
 
   return (
-    <DashboardLayout pageTitle={`Job ${order.id}`}>
+    <DashboardLayout pageTitle={`${isPrintJob ? "Print Job" : "Till Sale"} ${order.id}`}>
       <div className="max-w-4xl mx-auto space-y-4">
         {/* ── Back + Order ID row ── */}
         <motion.div
@@ -187,9 +188,9 @@ const JobDetailsPage = () => {
                   {order.fileName}
                 </p>
                 <p className="text-xs text-white/50">
-                  {order.pageCount} pages &middot;{" "}
-                  {order.copies} {order.copies === 1 ? "copy" : "copies"} &middot;{" "}
-                  {order.colorMode === "color" ? "Color" : "B&W"}
+                  {isPrintJob
+                    ? `${order.pageCount} pages · ${order.copies} ${order.copies === 1 ? "copy" : "copies"} · ${order.colorMode === "color" ? "Color" : "B&W"}`
+                    : `${order.copies} ${order.copies === 1 ? "item" : "items"} · POS till sale`}
                 </p>
               </div>
             </div>
@@ -453,7 +454,7 @@ const JobDetailsPage = () => {
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">Chat with Customer</h2>
                 <p className="text-xs text-gray-400">
-                  Ask questions about the order
+                  {isPrintJob ? "Ask questions about the print job" : "Review the till sale record"}
                 </p>
               </div>
             </div>
@@ -482,7 +483,7 @@ const JobDetailsPage = () => {
                 className="h-11 rounded-xl text-xs font-semibold"
               >
                 <CheckCircle2 size={15} className="mr-1.5" />
-                Accept
+                {isPrintJob ? "Accept" : "Sale Recorded"}
               </Button>
               <Button
                 variant="outline"

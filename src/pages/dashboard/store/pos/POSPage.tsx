@@ -27,6 +27,7 @@ import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
 import { ordersService } from "@/services/orders.service";
 import { posService } from "@/services/pos.service";
+import { isPrintProduct, orderKindNote } from "@/lib/order-kind";
 
 interface ServiceCategory {
   id: string;
@@ -42,6 +43,7 @@ interface ServiceItem {
   categoryId: string;
   name: string;
   price: number;
+  requiresProduction: boolean;
 }
 
 interface OrderLine {
@@ -105,6 +107,7 @@ const POSPage: React.FC = () => {
             categoryId: categories.find((category) => category.name.toLowerCase() === product.category.toLowerCase())?.id ?? "s1",
             name: product.name,
             price: storeProduct.vendor_price,
+            requiresProduction: isPrintProduct(product),
           })));
         }
       } catch (error) {
@@ -172,10 +175,12 @@ const POSPage: React.FC = () => {
     }
     setIsCharging(true);
     try {
+      const requiresProduction = order.some((line) => line.service.requiresProduction);
       const createdOrder = await ordersService.place({
         store_id: activeStore.id,
         channel: "POS",
         items: order.map((line) => ({ vendor_store_product_id: line.service.id, quantity: line.qty })),
+        notes: orderKindNote(requiresProduction ? "print_job" : "retail_sale"),
       });
       const method = paymentMethod === "cash" ? "CASH" : paymentMethod === "card" ? "CARD" : "MOBILE_MONEY";
       await posService.recordPayment({

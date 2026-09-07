@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { PrintJob, PrintJobStatus } from "@/types";
 import type { OrderDto, OrderStatusDto } from "@/services/contracts";
 import { ordersService } from "@/services/orders.service";
+import { getOrderKind } from "@/lib/order-kind";
 import { useStore } from "./store-context";
 
 interface JobContextValue {
@@ -36,16 +37,17 @@ const toPrintJobStatus = (status: OrderStatusDto): PrintJobStatus => {
 const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
   const items = order.items ?? [];
   const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
+  const orderKind = getOrderKind(order);
   const status = toPrintJobStatus(order.status);
   return {
     id: order.id,
-    fileName: order.order_number,
+    fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
     status,
     totalPrice: order.total,
     pageCount: copies,
     copies,
     colorMode: "color",
-    printer: { name: "Production queue" },
+    printer: { name: orderKind === "print_job" ? "Production queue" : "Walk-in till" },
     createdAt: new Date(order.created_at),
     lastUpdated: new Date(order.updated_at),
     customerName: order.customer_id ? `Customer ${order.customer_id.slice(0, 8)}` : "Walk-in customer",
@@ -53,6 +55,7 @@ const mapOrderToPrintJob = (order: OrderDto): PrintJob => {
     orderChannel: order.channel === "POS" ? "walk-in" : "online",
     notes: order.notes,
     backendStatus: order.status,
+    orderKind,
     statusHistory: [{ status, timestamp: new Date(order.updated_at) }],
   };
 };
