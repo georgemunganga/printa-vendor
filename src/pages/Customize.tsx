@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { motion } from 'framer-motion';
 import { ArrowRight, ArrowLeft, Check, Package } from 'lucide-react';
@@ -7,21 +7,27 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { getWorkflowForCategory } from '@/data/customizationWorkflows';
 import { patchVendorOnboardingState } from '@/lib/vendorOnboardingState';
+import { patchPrintOrderDraft, readPrintOrderDraft } from '@/lib/print-order-draft';
 
 const Customize = () => {
   const [searchParams] = useSearchParams();
-  const selectedCategory = searchParams.get('category') ?? undefined;
+  const savedDraft = readPrintOrderDraft();
+  const selectedCategory = searchParams.get('category') ?? savedDraft.category;
   const workflowGuide = getWorkflowForCategory(selectedCategory);
 
-  const [workflowSelections, setWorkflowSelections] = useState<Record<number, string>>({});
-  const [instructions, setInstructions] = useState('');
+  const [workflowSelections, setWorkflowSelections] = useState<Record<number, string>>(() => Object.fromEntries(
+    (workflowGuide?.steps ?? []).flatMap((step, index) => savedDraft.specifications[step.question]
+      ? [[index, savedDraft.specifications[step.question]]]
+      : [])
+  ));
+  const [instructions, setInstructions] = useState(savedDraft.notes ?? '');
   const [businessName, setBusinessName] = useState('');
   const [branchCount, setBranchCount] = useState('');
   const [enabledServices, setEnabledServices] = useState<string[]>([]);
   const [basePriceRule, setBasePriceRule] = useState('');
   const [fulfillmentMode, setFulfillmentMode] = useState<'pickup' | 'delivery' | 'both' | ''>('');
   const [hasEmployeePin, setHasEmployeePin] = useState(false);
-  const workflowSteps = workflowGuide?.steps ?? [];
+  const workflowSteps = useMemo(() => workflowGuide?.steps ?? [], [workflowGuide]);
   const serviceChoices = ['Paper', 'Cards', 'Banners', 'Books', 'Apparel'];
 
   const handleWorkflowSelect = (stepIndex: number, choiceLabel: string) => {
@@ -37,6 +43,16 @@ const Customize = () => {
     : false;
 
   useEffect(() => {
+    const specifications = Object.fromEntries(
+      workflowSteps.flatMap((step, index) => workflowSelections[index]
+        ? [[step.question, workflowSelections[index]]]
+        : [])
+    );
+    patchPrintOrderDraft({
+      category: selectedCategory,
+      specifications,
+      notes: instructions.trim() || undefined,
+    });
     patchVendorOnboardingState({
       businessProfileDone: businessName.trim().length > 0 && branchCount.trim().length > 0,
       servicesDone: enabledServices.length > 0,
@@ -45,7 +61,7 @@ const Customize = () => {
       teamSecurityDone: hasEmployeePin,
       specsCompleted: allStepsComplete,
     });
-  }, [allStepsComplete, basePriceRule, branchCount, businessName, enabledServices.length, fulfillmentMode, hasEmployeePin]);
+  }, [allStepsComplete, basePriceRule, branchCount, businessName, enabledServices.length, fulfillmentMode, hasEmployeePin, instructions, selectedCategory, workflowSelections, workflowSteps]);
 
   return (
     <Layout>
@@ -274,7 +290,7 @@ const Customize = () => {
           )}
 
           <div className="mt-8 flex justify-between items-center">
-            <Link to="/upload" className="flex items-center text-gray-500 hover:text-printa-red transition-colors">
+            <Link to={`/upload${selectedCategory ? `?category=${selectedCategory}` : ''}`} className="flex items-center text-gray-500 hover:text-printa-red transition-colors">
               <ArrowLeft size={18} className="mr-2" /> Back
             </Link>
             <Link
@@ -298,6 +314,3 @@ const Customize = () => {
 };
 
 export default Customize;
-
-
-

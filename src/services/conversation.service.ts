@@ -20,7 +20,7 @@ export interface ConversationMessageDto {
   read_at?: string;
 }
 
-interface UploadedAssetDto {
+export interface UploadedAssetDto {
   asset_id: string;
   name: string;
   content_type: string;

@@ -1,12 +1,15 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, X, LayoutGrid, Plus, CheckCircle, FileText } from 'lucide-react';
 import { toast } from "sonner";
 import { Button } from '@/components/ui/button';
+import { conversationService } from '@/services/conversation.service';
+import type { UploadedPrintFile } from '@/lib/print-order-draft';
 
 interface FileUploadProps {
-  onFilesSelected: (files: File[]) => void;
+  initialFiles?: UploadedPrintFile[];
+  onFilesChange: (files: UploadedPrintFile[]) => void;
 }
 
 interface UploadingFile {
@@ -15,13 +18,20 @@ interface UploadingFile {
   status: 'uploading' | 'complete' | 'error';
   uploadedAt?: Date;
   previewUrl?: string;
+  uploadedFile?: UploadedPrintFile;
 }
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ initialFiles = [], onFilesChange }) => {
   const [dragActive, setDragActive] = useState(false);
-  const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>(() => initialFiles.map((uploadedFile) => ({
+    file: new File([], uploadedFile.name, { type: uploadedFile.contentType }),
+    progress: 100,
+    status: 'complete',
+    uploadedAt: new Date(uploadedFile.uploadedAt),
+    uploadedFile,
+  })));
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -58,6 +68,48 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected }) => {
     return undefined;
   };
 
+  const notifyFilesChange = useCallback((files: UploadingFile[]) => {
+    onFilesChange(files.flatMap((file) => file.uploadedFile ? [file.uploadedFile] : []));
+  }, [onFilesChange]);
+
+  const uploadPendingFile = useCallback(async (pendingFile: UploadingFile) => {
+    try {
+      setUploadingFiles((current) => current.map((entry) => entry === pendingFile ? {
+        ...entry,
+        progress: 35,
+        status: 'uploading' as const,
+      } : entry));
+      const uploaded = await conversationService.uploadAttachment(pendingFile.file);
+      const uploadedFile: UploadedPrintFile = {
+        assetId: uploaded.asset_id,
+        name: uploaded.name || pendingFile.file.name,
+        contentType: uploaded.content_type || pendingFile.file.type,
+        sizeBytes: uploaded.size_bytes ?? pendingFile.file.size,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      setUploadingFiles((current) => {
+        const next = current.map((entry) => entry === pendingFile ? {
+          ...entry,
+          progress: 100,
+          status: 'complete' as const,
+          uploadedAt: new Date(uploadedFile.uploadedAt),
+          uploadedFile,
+        } : entry);
+        notifyFilesChange(next);
+        return next;
+      });
+      toast.success(`${pendingFile.file.name} uploaded successfully.`);
+    } catch (error) {
+      setUploadingFiles((current) => current.map((entry) => entry === pendingFile ? {
+        ...entry,
+        progress: 0,
+        status: 'error' as const,
+      } : entry));
+      toast.error(error instanceof Error ? error.message : `Unable to upload ${pendingFile.file.name}.`);
+    }
+  }, [notifyFilesChange]);
+
   const handleFiles = useCallback((files: File[]) => {
     // Check file types
     const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
@@ -87,58 +139,16 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected }) => {
 
     if (processedFiles.length > 0) {
       setUploadingFiles(prev => [...prev, ...processedFiles]);
-
-      // Simulate upload progress for each file
-      processedFiles.forEach((uploadFile, index) => {
-        simulateUpload(uploadingFiles.length + index);
-      });
+      processedFiles.forEach((file) => void uploadPendingFile(file));
     }
-  }, [uploadingFiles.length]);
-
-  const simulateUpload = (fileIndex: number) => {
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 15 + 5;
-
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-
-        setUploadingFiles(prev => {
-          const updated = [...prev];
-          if (updated[fileIndex]) {
-            updated[fileIndex] = {
-              ...updated[fileIndex],
-              progress: 100,
-              status: 'complete',
-              uploadedAt: new Date()
-            };
-            // Notify parent of completed file
-            onFilesSelected([updated[fileIndex].file]);
-          }
-          return updated;
-        });
-
-        toast.success('File uploaded successfully!');
-      } else {
-        setUploadingFiles(prev => {
-          const updated = [...prev];
-          if (updated[fileIndex]) {
-            updated[fileIndex] = {
-              ...updated[fileIndex],
-              progress
-            };
-          }
-          return updated;
-        });
-      }
-    }, 200);
-  };
+  }, [uploadPendingFile]);
 
   const removeFile = (index: number) => {
     setUploadingFiles(prev => {
       const newFiles = [...prev];
-      newFiles.splice(index, 1);
+      const [removed] = newFiles.splice(index, 1);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      notifyFilesChange(newFiles);
       return newFiles;
     });
   };
@@ -340,8 +350,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected }) => {
                         {uploadFile.status === 'complete' && (
                           <CheckCircle size={12} className="text-printa-red" />
                         )}
-                        <span>{getTimeAgo(uploadFile.uploadedAt)}</span>
+                        <span>{uploadFile.status === 'error' ? 'Upload failed' : getTimeAgo(uploadFile.uploadedAt)}</span>
                       </div>
+                      {uploadFile.status === 'error' && (
+                        <button
+                          type="button"
+                          onClick={() => void uploadPendingFile(uploadFile)}
+                          className="mt-1 text-xs font-semibold text-printa-red hover:underline"
+                        >
+                          Retry upload
+                        </button>
+                      )}
                     </div>
                   </motion.div>
                 ))}

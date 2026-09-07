@@ -8,18 +8,21 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from "sonner";
 import { Button } from '@/components/ui/button';
 import { patchVendorOnboardingState } from '@/lib/vendorOnboardingState';
+import { patchPrintOrderDraft, readPrintOrderDraft, type UploadedPrintFile } from '@/lib/print-order-draft';
 
 
 const Upload = () => {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [searchParams] = useSearchParams();
-  const category = searchParams.get('category');
+  const savedDraft = readPrintOrderDraft();
+  const [selectedFiles, setSelectedFiles] = useState<UploadedPrintFile[]>(savedDraft.files);
+  const category = searchParams.get('category') ?? savedDraft.category;
   const [pageDragActive, setPageDragActive] = useState(false);
   const dragCounter = useRef(0);
   const fileUploadRef = useRef<{ handleExternalDrop: (files: File[]) => void } | null>(null);
 
-  const handleFilesSelected = (files: File[]) => {
-    setSelectedFiles(prev => [...prev, ...files]);
+  const handleFilesChange = (files: UploadedPrintFile[]) => {
+    setSelectedFiles(files);
+    patchPrintOrderDraft({ files, category: category ?? undefined });
   };
 
   // Page-level drag and drop
@@ -149,7 +152,7 @@ const Upload = () => {
             </div>
           </div>
           
-          <FileUpload onFilesSelected={handleFilesSelected} />
+          <FileUpload initialFiles={selectedFiles} onFilesChange={handleFilesChange} />
           
           <div className="mt-8 flex justify-between items-center">
             <Link to="/" className="text-gray-500 hover:text-printa-red transition-colors">
@@ -178,5 +181,3 @@ const Upload = () => {
 };
 
 export default Upload;
-
-

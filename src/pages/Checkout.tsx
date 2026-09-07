@@ -12,6 +12,7 @@ import { DEFAULT_LOCATIONS, Location } from '@/data/locations';
 import { getApiKey } from '../../config/api-keys';
 import { useLoadScript } from '@react-google-maps/api';
 import { getVendorOnboardingState, patchVendorOnboardingState } from '@/lib/vendorOnboardingState';
+import { readPrintOrderDraft } from '@/lib/print-order-draft';
 
 const MapPicker = lazy(() => import('@/components/MapPicker'));
 
@@ -52,6 +53,7 @@ const Checkout = () => {
   const [currentLocationAddress, setCurrentLocationAddress] = useState<string>('');
   const [hasAutoLocated, setHasAutoLocated] = useState(false);
   const [onboardingSnapshot, setOnboardingSnapshot] = useState(getVendorOnboardingState());
+  const [printOrderDraft] = useState(readPrintOrderDraft);
 
   const locationOptions = DEFAULT_LOCATIONS;
 
@@ -300,19 +302,6 @@ const Checkout = () => {
     setDeliverySuggestions([]);
     setSearchQuery(suggestion.address);
     handleSelectLocation('delivery-current', { clearSearch: false });
-  };
-
-  // Mock files and options
-  const mockFiles = [
-    new File([""], "document1.pdf", { type: "application/pdf" }),
-    new File([""], "document2.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" })
-  ];
-
-  const mockPrintOptions = {
-    paperSize: 'a4',
-    paperType: 'standard',
-    printColor: 'color',
-    printSides: 'double',
   };
 
   const navigate = useNavigate();
@@ -615,8 +604,8 @@ const Checkout = () => {
                 </button>
                 <div className="p-4">
                   <OrderSummary
-                    files={mockFiles}
-                    printOptions={mockPrintOptions}
+                    files={printOrderDraft.files}
+                    printOptions={printOrderDraft.specifications}
                     locationId={selectedLocationId}
                     isDelivery={deliveryMethod === 'delivery'}
                     onCheckout={handleCheckout}
@@ -943,8 +932,8 @@ const Checkout = () => {
                 {/* Order Summary - Takes 2 columns */}
                 <div className="col-span-2">
                   <OrderSummary
-                    files={mockFiles}
-                    printOptions={mockPrintOptions}
+                    files={printOrderDraft.files}
+                    printOptions={printOrderDraft.specifications}
                     locationId={selectedLocationId}
                     isDelivery={deliveryMethod === 'delivery'}
                     onCheckout={handleCheckout}
@@ -966,5 +955,4 @@ const Checkout = () => {
 };
 
 export default Checkout;
-
 

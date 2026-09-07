@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
 interface OrderSummaryProps {
-  files: File[];
+  files: Array<{ name: string }>;
   printOptions: Record<string, string>;
   locationId: string | null;
   isDelivery?: boolean;
