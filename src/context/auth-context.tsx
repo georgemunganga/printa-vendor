@@ -4,6 +4,7 @@ import type { Permission, UserRole } from "@/types";
 import { ROLE_PERMISSIONS } from "@/lib/permissions";
 import { GOOGLE_CLIENT_ID } from "@/lib/auth-config";
 import { apiAuthSessionService } from "@/services/auth-session.service";
+import { securityPreferencesService } from "@/services/security-preferences.service";
 
 export interface StoreMembership {
   storeId: string;
@@ -207,6 +208,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setActiveStoreScopeHandler = useCallback((storeId: string | null) => {
     setActiveStoreScope(storeId);
   }, []);
+
+  useEffect(() => {
+    if (!user?.id || !isAuthenticated) return;
+
+    let timeoutId: number | undefined;
+    const loadPreferences = () => securityPreferencesService.get(user.id);
+
+    const scheduleLogout = () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+      const preferences = loadPreferences();
+      if (!preferences.auto_session_timeout_enabled) return;
+      timeoutId = window.setTimeout(() => {
+        logout();
+      }, preferences.auto_session_timeout_minutes * 60 * 1000);
+    };
+
+    const handlePreferenceUpdate = (event: Event) => {
+      const updatedUserId = event instanceof CustomEvent ? event.detail?.userId : null;
+      if (!updatedUserId || updatedUserId === user.id) scheduleLogout();
+    };
+
+    const activityEvents = ["click", "keydown", "mousemove", "touchstart", "visibilitychange"] as const;
+    activityEvents.forEach((eventName) => window.addEventListener(eventName, scheduleLogout, { passive: true }));
+    window.addEventListener("printa-security-preferences-updated", handlePreferenceUpdate);
+    scheduleLogout();
+
+    return () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+      activityEvents.forEach((eventName) => window.removeEventListener(eventName, scheduleLogout));
+      window.removeEventListener("printa-security-preferences-updated", handlePreferenceUpdate);
+    };
+  }, [user?.id, isAuthenticated, logout]);
 
   const value = useMemo(
     () => ({

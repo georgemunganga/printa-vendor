@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { operatingHoursService } from "@/services/operating-hours.service";
 import { inventoryService } from "@/services/inventory.service";
 import { defaultNotificationPreferences, notificationPreferencesService, type NotificationPreferencesDto } from "@/services/notification-preferences.service";
+import { defaultSecurityPreferences, securityPreferencesService, SESSION_TIMEOUT_OPTIONS, type SecurityPreferencesDto } from "@/services/security-preferences.service";
 import type { OperatingHourDto, StoreDto } from "@/services/contracts";
 
 interface SettingCard {
@@ -79,8 +80,11 @@ const SettingsPage = () => {
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferencesDto>(defaultNotificationPreferences);
   const [isLoadingNotificationPreferences, setIsLoadingNotificationPreferences] = useState(false);
   const [isSavingNotificationPreferences, setIsSavingNotificationPreferences] = useState(false);
+  const [securityPreferences, setSecurityPreferences] = useState<SecurityPreferencesDto>(defaultSecurityPreferences);
+  const [isSavingSecurityPreferences, setIsSavingSecurityPreferences] = useState(false);
   const canEditStoreSettings = isOwner() || can("edit_store_settings");
   const canManageNotificationPreferences = isOwner() || can("manage_notifications") || can("manage_settings");
+  const canManageSecurityPreferences = isOwner() || can("manage_settings");
 
   useEffect(() => {
     if (!activeStore?.id) {
@@ -135,6 +139,11 @@ const SettingsPage = () => {
     };
   }, [activeModal, activeStore?.id, userId]);
 
+  useEffect(() => {
+    if (activeModal !== "security" || !userId) return;
+    setSecurityPreferences(securityPreferencesService.get(userId));
+  }, [activeModal, userId]);
+
   const openStoreSettings = () => {
     if (!activeStore) {
       toast.error("Select a store before managing store profile.");
@@ -174,6 +183,25 @@ const SettingsPage = () => {
       toast.error(error instanceof Error ? error.message : "Unable to save store profile.");
     } finally {
       setIsSavingStore(false);
+    }
+  };
+
+  const updateSecurityPreference = (field: keyof SecurityPreferencesDto, value: boolean | number) => {
+    setSecurityPreferences((current) => ({ ...current, [field]: value }));
+  };
+
+  const saveSecurityPreferences = () => {
+    if (!userId || !canManageSecurityPreferences) return;
+    setIsSavingSecurityPreferences(true);
+    try {
+      const saved = securityPreferencesService.save(userId, securityPreferences);
+      setSecurityPreferences(saved);
+      toast.success("Security settings saved.");
+      setActiveModal(null);
+    } catch {
+      toast.error("Unable to save security settings.");
+    } finally {
+      setIsSavingSecurityPreferences(false);
     }
   };
 
@@ -620,37 +648,70 @@ const SettingsPage = () => {
             Security Settings
           </span>
         }
-        description="OTP sign-in is active. Account security preferences are not yet configured."
+        description="Control how long this device can stay signed in when inactive."
       >
-        <div className="space-y-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="two-factor" className="text-sm font-medium">Two-Factor Authentication</Label>
-              <p className="text-xs text-gray-500">Add an extra layer of security</p>
+        <div className="space-y-4 py-2">
+          <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label className="text-sm font-semibold text-gray-900">OTP sign-in</Label>
+                <p className="mt-1 text-xs leading-5 text-gray-600">Email or phone OTP sign-in is active for this account.</p>
+              </div>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-green-700">Active</span>
             </div>
-            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="session" className="text-sm font-medium">Auto Session Timeout</Label>
-              <p className="text-xs text-gray-500">Log out after 30 minutes of inactivity</p>
+
+          <div className="rounded-2xl border border-gray-100 bg-white p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <Label htmlFor="auto-session-timeout" className="text-sm font-semibold text-gray-900">Auto session timeout</Label>
+                <p className="mt-1 text-xs leading-5 text-gray-500">Log this device out after a period of inactivity.</p>
+              </div>
+              <Switch
+                id="auto-session-timeout"
+                checked={securityPreferences.auto_session_timeout_enabled}
+                onCheckedChange={(checked) => updateSecurityPreference("auto_session_timeout_enabled", checked)}
+                disabled={!canManageSecurityPreferences || isSavingSecurityPreferences}
+                className="data-[state=checked]:bg-printa-red"
+              />
             </div>
-            <span className="text-xs font-medium text-gray-400">Not configured</span>
+
+            {securityPreferences.auto_session_timeout_enabled && (
+              <div className="mt-4">
+                <Label htmlFor="session-timeout-minutes" className="text-sm font-medium">Timeout after</Label>
+                <select
+                  id="session-timeout-minutes"
+                  value={securityPreferences.auto_session_timeout_minutes}
+                  onChange={(event) => updateSecurityPreference("auto_session_timeout_minutes", Number(event.target.value))}
+                  disabled={!canManageSecurityPreferences || isSavingSecurityPreferences}
+                  className="mt-1 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/20"
+                >
+                  {SESSION_TIMEOUT_OPTIONS.map((minutes) => (
+                    <option key={minutes} value={minutes}>{minutes} minutes</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setActiveModal(null)} className="rounded-xl">
-            Cancel
-          </Button>
-          <Button
-            className="bg-printa-red hover:bg-printa-red/90 rounded-xl"
-            onClick={() => {
-              toast.error("Security preferences are not configured for vendor accounts yet.");
-              setActiveModal(null);
-            }}
-          >
-            Save changes
-          </Button>
+
+          {!canManageSecurityPreferences && (
+            <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">You can view security settings, but only the owner can save changes.</p>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setActiveModal(null)} className="rounded-xl" disabled={isSavingSecurityPreferences}>
+              Close
+            </Button>
+            {canManageSecurityPreferences && (
+              <Button
+                className="bg-printa-red hover:bg-printa-red/90 rounded-xl"
+                onClick={saveSecurityPreferences}
+                disabled={isSavingSecurityPreferences}
+              >
+                {isSavingSecurityPreferences ? "Saving…" : "Save settings"}
+              </Button>
+            )}
+          </div>
         </div>
       </ResponsiveModal>
 
