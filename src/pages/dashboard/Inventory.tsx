@@ -28,9 +28,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useStore } from "@/context/store-context";
+import { useAuth } from "@/context/auth-context";
 import { catalogService } from "@/services/catalog.service";
 import { inventoryService } from "@/services/inventory.service";
 import type { PlatformProductDto, VendorStoreProductDto } from "@/services/contracts";
+
+type InventorySource = "printa" | "custom";
 
 interface Product {
   id: string;
@@ -41,17 +44,28 @@ interface Product {
   price: number;
   stock: number;
   visible: boolean;
+  source: InventorySource;
 }
 
 interface ProductForm {
+  source: InventorySource;
   platformProductId: string;
+  customName: string;
+  customCategory: string;
+  customDescription: string;
+  customSku: string;
   price: string;
   stock: string;
   visible: boolean;
 }
 
 const emptyForm: ProductForm = {
+  source: "printa",
   platformProductId: "",
+  customName: "",
+  customCategory: "",
+  customDescription: "",
+  customSku: "",
   price: "",
   stock: "",
   visible: true,
@@ -69,8 +83,12 @@ const iconForCategory = (category?: string): LucideIcon => {
   return Package;
 };
 
+const getInventorySource = (product?: PlatformProductDto): InventorySource =>
+  product?.attributes?.inventory_source === "custom" ? "custom" : "printa";
+
 const toInventoryProduct = (storeProduct: VendorStoreProductDto, catalogueById: Map<string, PlatformProductDto>): Product => {
   const platformProduct = catalogueById.get(storeProduct.platform_product_id);
+  const source = getInventorySource(platformProduct);
   return {
     id: storeProduct.id,
     platformProductId: storeProduct.platform_product_id,
@@ -80,11 +98,13 @@ const toInventoryProduct = (storeProduct: VendorStoreProductDto, catalogueById: 
     price: storeProduct.vendor_price,
     stock: storeProduct.stock_quantity,
     visible: storeProduct.is_available,
+    source,
   };
 };
 
 const Inventory = () => {
   const { activeStore } = useStore();
+  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogueProducts, setCatalogueProducts] = useState<PlatformProductDto[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -92,6 +112,8 @@ const Inventory = () => {
   const [reloadKey, setReloadKey] = useState(0);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sourceTab, setSourceTab] = useState<InventorySource>("printa");
+  const [wizardStep, setWizardStep] = useState<0 | 1>(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -118,7 +140,7 @@ const Inventory = () => {
       const catalogueList = Array.isArray(catalogue) ? catalogue : [];
       const storeProductList = Array.isArray(storeProducts) ? storeProducts : [];
       const catalogueById = new Map(catalogueList.map((product) => [product.id, product]));
-      setCatalogueProducts(catalogueList);
+      setCatalogueProducts(catalogueList.filter((product) => getInventorySource(product) === "printa"));
       setProducts(storeProductList.map((product) => toInventoryProduct(product, catalogueById)));
       setLoadError(null);
     } catch (error) {
@@ -135,14 +157,17 @@ const Inventory = () => {
   }, [refreshInventory, reloadKey]);
 
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return products;
+    const sourceProducts = products.filter((product) => product.source === sourceTab);
+    if (!searchQuery.trim()) return sourceProducts;
     const query = searchQuery.toLowerCase();
-    return products.filter((product) => product.name.toLowerCase().includes(query) || product.category.toLowerCase().includes(query));
-  }, [products, searchQuery]);
+    return sourceProducts.filter((product) => product.name.toLowerCase().includes(query) || product.category.toLowerCase().includes(query));
+  }, [products, searchQuery, sourceTab]);
 
-  const activeCount = products.filter((product) => product.visible).length;
-  const totalStock = products.reduce((total, product) => total + product.stock, 0);
-  const lowestStock = products.length ? [...products].sort((left, right) => left.stock - right.stock)[0] : null;
+  const printaCount = products.filter((product) => product.source === "printa").length;
+  const customCount = products.filter((product) => product.source === "custom").length;
+  const activeCount = filtered.filter((product) => product.visible).length;
+  const totalStock = filtered.reduce((total, product) => total + product.stock, 0);
+  const lowestStock = filtered.length ? [...filtered].sort((left, right) => left.stock - right.stock)[0] : null;
 
   const openAdd = () => {
     if (!activeStore?.id) {
@@ -151,13 +176,19 @@ const Inventory = () => {
     }
     setEditingProduct(null);
     setForm(emptyForm);
+    setWizardStep(0);
     setModalOpen(true);
   };
 
   const openEdit = (product: Product) => {
     setEditingProduct(product);
     setForm({
+      source: product.source,
       platformProductId: product.platformProductId,
+      customName: "",
+      customCategory: "",
+      customDescription: "",
+      customSku: "",
       price: String(product.price),
       stock: String(product.stock),
       visible: product.visible,
@@ -171,6 +202,7 @@ const Inventory = () => {
       setModalOpen(false);
       setEditingProduct(null);
       setForm(emptyForm);
+      setWizardStep(0);
     }
   };
 
@@ -178,8 +210,16 @@ const Inventory = () => {
     if (!activeStore?.id || isSaving) return;
     const price = Number(form.price);
     const stock = Number(form.stock);
-    if (!form.platformProductId || !Number.isFinite(price) || price <= 0 || !Number.isInteger(stock) || stock < 0) {
-      toast.error("Select a catalogue product and enter a valid price and whole-number stock quantity.");
+    if (!Number.isFinite(price) || price <= 0 || !Number.isInteger(stock) || stock < 0) {
+      toast.error("Enter a valid price and whole-number stock quantity.");
+      return;
+    }
+    if (form.source === "printa" && !form.platformProductId) {
+      toast.error("Select a Printa catalogue product.");
+      return;
+    }
+    if (form.source === "custom" && (form.customName.trim().length < 2 || form.customCategory.trim().length < 2)) {
+      toast.error("Enter a custom item name and category.");
       return;
     }
 
@@ -191,8 +231,27 @@ const Inventory = () => {
         if (editingProduct.visible !== form.visible) await inventoryService.setAvailability(editingProduct.id, form.visible);
         toast.success("Inventory updated.");
       } else {
+        let platformProductId = form.platformProductId;
+        if (form.source === "custom") {
+          const sku = form.customSku.trim() || `CUSTOM-${activeStore.id.slice(0, 8)}-${Date.now()}`;
+          const customProduct = await catalogService.createProduct({
+            name: form.customName.trim(),
+            description: form.customDescription.trim() || `${form.customName.trim()} sold by ${activeStore.name}`,
+            category: form.customCategory.trim(),
+            base_price: price,
+            currency: "ZMW",
+            sku,
+            image_url: "",
+            attributes: {
+              inventory_source: "custom",
+              vendor_id: user?.businessId ?? "",
+              store_id: activeStore.id,
+            },
+          });
+          platformProductId = customProduct.id;
+        }
         const created = await inventoryService.addProduct(activeStore.id, {
-          platform_product_id: form.platformProductId,
+          platform_product_id: platformProductId,
           vendor_price: price,
           currency: "ZMW",
           stock_quantity: stock,
@@ -204,6 +263,7 @@ const Inventory = () => {
       setModalOpen(false);
       setEditingProduct(null);
       setForm(emptyForm);
+      setWizardStep(0);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save inventory.");
     } finally {
@@ -246,7 +306,7 @@ const Inventory = () => {
         <div className="flex items-start justify-between gap-3">
           <div className={searchOpen ? "hidden md:block" : ""}>
             <h1 className="dashboard-page-title">Inventory</h1>
-            <p className="text-xs text-gray-400 mt-0.5">{products.length} products</p>
+            <p className="text-xs text-gray-400 mt-0.5">{filtered.length} {sourceTab === "printa" ? "Printa catalogue" : "custom"} products</p>
           </div>
 
           {searchOpen ? (
@@ -280,6 +340,26 @@ const Inventory = () => {
         </div>
       </div>
 
+      <div className="mb-4 inline-flex rounded-2xl border border-gray-200 bg-white p-1 shadow-sm">
+        {([
+          { key: "printa" as InventorySource, label: "Printa inventory", count: printaCount, help: "Catalogue items claimed by this store" },
+          { key: "custom" as InventorySource, label: "Custom inventory", count: customCount, help: "Vendor-owned goods and services" },
+        ]).map((tab) => {
+          const active = sourceTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setSourceTab(tab.key)}
+              className={`rounded-xl px-4 py-2 text-left transition ${active ? "bg-gray-900 text-white shadow-sm" : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"}`}
+            >
+              <span className="block text-xs font-bold">{tab.label} <span className={active ? "text-white/60" : "text-gray-400"}>({tab.count})</span></span>
+              <span className={`hidden text-[10px] md:block ${active ? "text-white/60" : "text-gray-400"}`}>{tab.help}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="bg-white rounded-2xl border border-gray-100 mb-5 overflow-hidden">
         <button type="button" onClick={() => setStatsOpen((open) => !open)} className="w-full flex items-center justify-between px-5 py-3">
           <span className="text-sm font-semibold text-gray-900">Product Statistics</span>
@@ -289,7 +369,7 @@ const Inventory = () => {
           {statsOpen && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4 px-5 pb-4 border-t border-gray-50 pt-4">
-                <div><p className="text-[11px] text-gray-400 uppercase tracking-wide">Active Products</p><p className="text-2xl font-bold text-gray-900 mt-1">{activeCount} <span className="text-sm font-normal text-gray-400">products</span></p></div>
+                <div><p className="text-[11px] text-gray-400 uppercase tracking-wide">{sourceTab === "printa" ? "Active Printa Items" : "Active Custom Items"}</p><p className="text-2xl font-bold text-gray-900 mt-1">{activeCount} <span className="text-sm font-normal text-gray-400">products</span></p></div>
                 <div><p className="text-[11px] text-gray-400 uppercase tracking-wide">Total Stock</p><p className="text-2xl font-bold text-gray-900 mt-1">{totalStock}</p></div>
                 <div><p className="text-[11px] text-gray-400 uppercase tracking-wide">Lowest Stock</p><p className="text-sm font-semibold text-gray-900 mt-2 truncate">{lowestStock ? `${lowestStock.name} (${lowestStock.stock})` : "—"}</p></div>
                 <div><p className="text-[11px] text-gray-400 uppercase tracking-wide">Sales</p><p className="text-sm font-semibold text-gray-400 mt-2">Not available</p></div>
@@ -338,13 +418,128 @@ const Inventory = () => {
           )}
 
           {filtered.length === 0 && (
-            <div className="rounded-2xl bg-white border border-gray-100 p-12 text-center"><div className="w-14 h-14 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center"><Package size={24} className="text-gray-300" /></div><p className="text-sm font-semibold text-gray-900">{loadError ? "Unable to load products" : "No products found"}</p><p className="mt-1 text-xs text-gray-400">{loadError ? loadError : searchQuery ? "Try a different search term" : "Add a product from the platform catalogue to get started"}</p>{loadError && <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="mt-3 text-xs font-semibold text-printa-red hover:underline">Try again</button>}</div>
+            <div className="rounded-2xl bg-white border border-gray-100 p-12 text-center"><div className="w-14 h-14 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center"><Package size={24} className="text-gray-300" /></div><p className="text-sm font-semibold text-gray-900">{loadError ? "Unable to load products" : "No products found"}</p><p className="mt-1 text-xs text-gray-400">{loadError ? loadError : searchQuery ? "Try a different search term" : sourceTab === "printa" ? "Claim a product from the Printa catalogue to get started" : "Create a custom item for goods this shop sells outside the Printa catalogue"}</p>{loadError && <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="mt-3 text-xs font-semibold text-printa-red hover:underline">Try again</button>}</div>
           )}
         </>
       )}
 
-      <ResponsiveModal open={modalOpen} onOpenChange={closeModal}>
-        <div className="p-1"><h2 className="text-lg font-semibold text-gray-900 mb-4">{editingProduct ? "Edit Product" : "New Product"}</h2><div className="space-y-4"><div><Label>Product Name *</Label>{editingProduct ? <Input value={editingProduct.name} readOnly className="mt-1 bg-gray-50" /> : <select value={form.platformProductId} onChange={(event) => setForm((current) => ({ ...current, platformProductId: event.target.value }))} className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-printa-red"><option value="">Select a platform product</option>{catalogueProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>}</div><div><Label>Category</Label><Input value={editingProduct?.category ?? selectedCatalogueProduct?.category ?? "Select a product to view its category"} readOnly className="mt-1 bg-gray-50" /></div><div className="grid grid-cols-2 gap-3"><div><Label>Price (K) *</Label><Input type="number" min="0.01" step="0.01" value={form.price} onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))} placeholder="0.00" className="mt-1" /></div><div><Label>Stock *</Label><Input type="number" min="0" step="1" value={form.stock} onChange={(event) => setForm((current) => ({ ...current, stock: event.target.value }))} placeholder="0" className="mt-1" /></div></div><div className="flex items-center justify-between py-2"><Label className="mb-0">Visible to customers</Label><button type="button" onClick={() => setForm((current) => ({ ...current, visible: !current.visible }))} className={`relative w-10 h-6 rounded-full transition-colors ${form.visible ? "bg-gray-900" : "bg-gray-200"}`}><span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${form.visible ? "translate-x-4" : "translate-x-0"}`} /></button></div><div className="flex gap-2 pt-2"><Button variant="outline" className="flex-1" onClick={() => closeModal(false)} disabled={isSaving}>Cancel</Button><Button className="flex-1 bg-gray-900 hover:bg-gray-800" onClick={() => void handleSubmit()} disabled={isSaving}>{isSaving ? "Saving..." : editingProduct ? "Save Changes" : "Add Product"}</Button></div></div></div>
+      <ResponsiveModal open={modalOpen} onOpenChange={closeModal} className="sm:max-w-2xl">
+        <div className="space-y-5 p-1">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-printa-red">{editingProduct ? "Inventory item" : `Step ${wizardStep + 1} of 2`}</p>
+            <h2 className="mt-1 text-xl font-bold text-gray-900">{editingProduct ? "Edit product" : "Add inventory item"}</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              {editingProduct ? "Update stock, pricing, and visibility for this store." : "Choose whether this is a Printa catalogue item or a vendor-owned custom item."}
+            </p>
+          </div>
+
+          {!editingProduct && wizardStep === 0 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {([
+                { source: "printa" as InventorySource, title: "Printa inventory", body: "Claim an item from the platform print catalogue and control your local stock and price.", icon: FileText },
+                { source: "custom" as InventorySource, title: "Custom inventory", body: "Create goods or services this vendor sells outside the Printa catalogue, like shoes or accessories.", icon: Package },
+              ]).map((option) => {
+                const Icon = option.icon;
+                const selected = form.source === option.source;
+                return (
+                  <button
+                    key={option.source}
+                    type="button"
+                    onClick={() => setForm((current) => ({ ...current, source: option.source, platformProductId: "" }))}
+                    className={`rounded-2xl border p-4 text-left transition ${selected ? "border-gray-900 bg-gray-900 text-white shadow-sm" : "border-gray-100 bg-white hover:border-gray-200"}`}
+                  >
+                    <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-xl ${selected ? "bg-white/10 text-white" : "bg-gray-50 text-gray-600"}`}>
+                      <Icon size={20} />
+                    </div>
+                    <p className="text-sm font-bold">{option.title}</p>
+                    <p className={`mt-1 text-xs leading-5 ${selected ? "text-white/65" : "text-gray-500"}`}>{option.body}</p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {(editingProduct || wizardStep === 1) && (
+            <div className="space-y-4">
+              {editingProduct ? (
+                <div>
+                  <Label>Product name</Label>
+                  <Input value={editingProduct.name} readOnly className="mt-1 bg-gray-50" />
+                </div>
+              ) : form.source === "printa" ? (
+                <div>
+                  <Label>Printa catalogue product *</Label>
+                  <select
+                    value={form.platformProductId}
+                    onChange={(event) => setForm((current) => ({ ...current, platformProductId: event.target.value }))}
+                    className="mt-1 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/20"
+                  >
+                    <option value="">Select a platform product</option>
+                    {catalogueProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label>Custom item name *</Label>
+                    <Input value={form.customName} onChange={(event) => setForm((current) => ({ ...current, customName: event.target.value }))} placeholder="e.g. School shoes" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>Category *</Label>
+                    <Input value={form.customCategory} onChange={(event) => setForm((current) => ({ ...current, customCategory: event.target.value }))} placeholder="e.g. Footwear" className="mt-1" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>Description</Label>
+                    <Input value={form.customDescription} onChange={(event) => setForm((current) => ({ ...current, customDescription: event.target.value }))} placeholder="Short description for the cashier and inventory list" className="mt-1" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>SKU / barcode</Label>
+                    <Input value={form.customSku} onChange={(event) => setForm((current) => ({ ...current, customSku: event.target.value }))} placeholder="Optional; autogenerated if blank" className="mt-1" />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <Label>Category</Label>
+                <Input value={editingProduct?.category ?? selectedCatalogueProduct?.category ?? (form.source === "custom" ? form.customCategory || "Custom item" : "Select a product to view its category")} readOnly className="mt-1 bg-gray-50" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Price (K) *</Label>
+                  <Input type="number" min="0.01" step="0.01" value={form.price} onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))} placeholder="0.00" className="mt-1" />
+                </div>
+                <div>
+                  <Label>Stock *</Label>
+                  <Input type="number" min="0" step="1" value={form.stock} onChange={(event) => setForm((current) => ({ ...current, stock: event.target.value }))} placeholder="0" className="mt-1" />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <div>
+                  <Label className="mb-0">Visible in POS</Label>
+                  <p className="mt-0.5 text-xs text-gray-400">Hidden items stay in inventory but will not be sold from the till.</p>
+                </div>
+                <button type="button" onClick={() => setForm((current) => ({ ...current, visible: !current.visible }))} className={`relative h-6 w-10 rounded-full transition-colors ${form.visible ? "bg-gray-900" : "bg-gray-200"}`}>
+                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${form.visible ? "translate-x-5" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2 border-t border-gray-100 pt-4">
+            <Button variant="outline" className="flex-1" onClick={() => wizardStep === 1 && !editingProduct ? setWizardStep(0) : closeModal(false)} disabled={isSaving}>
+              {wizardStep === 1 && !editingProduct ? "Back" : "Cancel"}
+            </Button>
+            {!editingProduct && wizardStep === 0 ? (
+              <Button className="flex-1 bg-gray-900 hover:bg-gray-800" onClick={() => setWizardStep(1)}>Continue</Button>
+            ) : (
+              <Button className="flex-1 bg-gray-900 hover:bg-gray-800" onClick={() => void handleSubmit()} disabled={isSaving}>
+                {isSaving ? "Saving..." : editingProduct ? "Save changes" : "Add item"}
+              </Button>
+            )}
+          </div>
+        </div>
       </ResponsiveModal>
     </DashboardLayout>
   );
