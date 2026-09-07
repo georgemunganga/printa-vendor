@@ -520,8 +520,8 @@ export const POSOrderSummary: React.FC<OrderSummaryProps> = ({
                     }`}
                   >
                     {disabled && (
-                      <span className="absolute -top-1 right-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-bold uppercase text-amber-700">
-                        Soon
+                      <span className="absolute -top-1 right-1 rounded-full bg-printa-red px-1.5 py-0.5 text-[8px] font-bold uppercase text-white shadow-sm">
+                        Coming soon
                       </span>
                     )}
                     <Icon size={16} />
