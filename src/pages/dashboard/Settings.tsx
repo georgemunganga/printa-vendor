@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Bell, Lock, Shield, DollarSign, Smartphone, Check, Clock, LogOut, Store, Package, Building2, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { useCurrencyContext } from "@/context/currency-context";
 import { useAuth } from "@/context/auth-context";
@@ -239,7 +240,7 @@ const SettingsPage = () => {
         <div>
           {/* <p className="text-sm font-semibold text-printa-red">Settings</p> */}
           <h1 className="dashboard-page-title">Store Settings</h1>
-          <p className="dashboard-page-subtitle">Control your privacy, notifications, and security.</p>
+          <p className="dashboard-page-subtitle">Manage this store’s public profile, hours, inventory, notifications, and security.</p>
         </div>
 
         <div className="space-y-4">
@@ -251,7 +252,7 @@ const SettingsPage = () => {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Store Profile</p>
-                  <p className="text-sm text-gray-500">Set the public store identity used on POS, receipts, orders, and customer pages.</p>
+                  <p className="text-sm text-gray-500">Set the store details used on POS, receipts, orders, and customer-facing pages.</p>
                   <div className="mt-3 grid gap-2 text-xs text-gray-500 sm:grid-cols-2">
                     <span className="font-semibold text-gray-800">{storeDetails?.name ?? activeStore?.name ?? "No store selected"}</span>
                     <span>{storeDetails?.phone || activeStore?.phone || "No phone set"}</span>
@@ -264,7 +265,7 @@ const SettingsPage = () => {
               </Button>
             </div>
             {!canEditStoreSettings && activeStore && (
-              <p className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">Only the store owner or a manager with store-settings permission can change this profile.</p>
+              <p className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">Only the store owner or an authorized manager can change this profile.</p>
             )}
           </div>
 
@@ -359,7 +360,7 @@ const SettingsPage = () => {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white">Download</p>
-                  <p className="text-sm text-white">Download app on the playstore on the apple store</p>
+                  <p className="text-sm text-white">Download the Printa app from Google Play or the App Store.</p>
                 </div>
               </div>
               <Button
@@ -410,10 +411,10 @@ const SettingsPage = () => {
             Store Profile
           </span>
         }
-        description={activeStore ? `Public details for ${activeStore.name}.` : "Select a store to manage its profile."}
+        description={activeStore ? `Public store details for ${activeStore.name}.` : "Select a store to manage its profile."}
       >
         {isLoadingStore ? (
-          <div className="py-8 text-center text-sm text-gray-500">Loading store profile...</div>
+          <div className="py-8 text-center text-sm text-gray-500">Loading store profile…</div>
         ) : (
           <div className="space-y-4 py-2">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -423,7 +424,7 @@ const SettingsPage = () => {
               </div>
               <div className="sm:col-span-2">
                 <Label htmlFor="store-description">Store description</Label>
-                <Textarea id="store-description" value={storeForm.description} onChange={(event) => updateStoreForm("description", event.target.value)} disabled={!canEditStoreSettings || isSavingStore} placeholder="Short description customers and staff can recognize." className="mt-1" />
+                <Textarea id="store-description" value={storeForm.description} onChange={(event) => updateStoreForm("description", event.target.value)} disabled={!canEditStoreSettings || isSavingStore} placeholder="A short description customers and staff can recognize." className="mt-1" />
               </div>
               <div className="sm:col-span-2">
                 <Label htmlFor="store-address">Street address *</Label>
@@ -447,13 +448,13 @@ const SettingsPage = () => {
               </div>
             </div>
             {!canEditStoreSettings && (
-              <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">You can view this profile, but only the owner or an allowed manager can save changes.</p>
+              <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">You can view this profile, but only the owner or an authorized manager can save changes.</p>
             )}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setActiveModal(null)} disabled={isSavingStore}>Close</Button>
               {canEditStoreSettings && (
                 <Button className="bg-printa-red hover:bg-printa-red/90" onClick={() => void saveStoreProfile()} disabled={isSavingStore || !activeStore}>
-                  {isSavingStore ? "Saving..." : "Save Profile"}
+                  {isSavingStore ? "Saving…" : "Save profile"}
                 </Button>
               )}
             </div>
@@ -473,7 +474,7 @@ const SettingsPage = () => {
         description={activeStore ? `Published availability for ${activeStore.name}.` : "Select a store to manage operating hours."}
       >
         {isLoadingOperatingHours ? (
-          <div className="py-8 text-center text-sm text-gray-500">Loading operating hours...</div>
+          <div className="py-8 text-center text-sm text-gray-500">Loading operating hours…</div>
         ) : (
           <div className="space-y-3 py-2">
             <p className="text-xs text-gray-500">Closed days are saved without opening or closing times. Overnight hours are not supported by this first contract.</p>
@@ -515,7 +516,7 @@ const SettingsPage = () => {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setActiveModal(null)} disabled={isSavingOperatingHours}>Cancel</Button>
               <Button className="bg-printa-red hover:bg-printa-red/90" onClick={() => void saveOperatingHours()} disabled={isSavingOperatingHours}>
-                {isSavingOperatingHours ? "Saving..." : "Save Hours"}
+                {isSavingOperatingHours ? "Saving…" : "Save hours"}
               </Button>
             </div>
           </div>
@@ -561,7 +562,7 @@ const SettingsPage = () => {
               setActiveModal(null);
             }}
           >
-            Save Changes
+            Save changes
           </Button>
         </div>
       </ResponsiveModal>
@@ -619,7 +620,7 @@ const SettingsPage = () => {
               setActiveModal(null);
             }}
           >
-            Save Changes
+            Save changes
           </Button>
         </div>
       </ResponsiveModal>
@@ -670,7 +671,7 @@ const SettingsPage = () => {
               setActiveModal(null);
             }}
           >
-            Save Changes
+            Save changes
           </Button>
         </div>
       </ResponsiveModal>
@@ -720,10 +721,10 @@ const SettingsPage = () => {
         title={
           <span className="flex items-center gap-2">
             <Smartphone size={20} className="text-printa-red" />
-            Download Printa App
+            Download Printa app
           </span>
         }
-        description="Get the full mobile experience"
+        description="Get the mobile app when it is available."
       >
         <div className="space-y-3 py-4">
           <button
@@ -731,7 +732,7 @@ const SettingsPage = () => {
             className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-300 transition-colors"
             onClick={() => {
               window.open("https://play.google.com/store", "_blank");
-              toast.success("Opening Google Play Store...");
+              toast.success("Opening Google Play…");
             }}
           >
             <div className="w-12 h-12 rounded-xl bg-black flex items-center justify-center">
@@ -749,7 +750,7 @@ const SettingsPage = () => {
             className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-300 transition-colors"
             onClick={() => {
               window.open("https://apps.apple.com", "_blank");
-              toast.success("Opening App Store...");
+              toast.success("Opening the App Store…");
             }}
           >
             <div className="w-12 h-12 rounded-xl bg-black flex items-center justify-center">
