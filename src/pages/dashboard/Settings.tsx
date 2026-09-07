@@ -10,9 +10,11 @@ import { useStore } from "@/context/store-context";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { operatingHoursService } from "@/services/operating-hours.service";
 import { inventoryService } from "@/services/inventory.service";
+import { defaultNotificationPreferences, notificationPreferencesService, type NotificationPreferencesDto } from "@/services/notification-preferences.service";
 import type { OperatingHourDto, StoreDto } from "@/services/contracts";
 
 interface SettingCard {
@@ -62,7 +64,8 @@ const toStoreForm = (store: StoreDto): StoreSettingsForm => ({
 
 const SettingsPage = () => {
   const { selectedCurrency, availableCurrencies } = useCurrencyContext();
-  const { logout, can, isOwner } = useAuth();
+  const { logout, can, isOwner, user } = useAuth();
+  const userId = user?.id;
   const { activeStore, setActiveStore, refreshStores } = useStore();
   const navigate = useNavigate();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
@@ -73,7 +76,11 @@ const SettingsPage = () => {
   const [operatingHours, setOperatingHours] = useState<OperatingHourDto[]>(createEmptyOperatingHours);
   const [isLoadingOperatingHours, setIsLoadingOperatingHours] = useState(false);
   const [isSavingOperatingHours, setIsSavingOperatingHours] = useState(false);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferencesDto>(defaultNotificationPreferences);
+  const [isLoadingNotificationPreferences, setIsLoadingNotificationPreferences] = useState(false);
+  const [isSavingNotificationPreferences, setIsSavingNotificationPreferences] = useState(false);
   const canEditStoreSettings = isOwner() || can("edit_store_settings");
+  const canManageNotificationPreferences = isOwner() || can("manage_notifications") || can("manage_settings");
 
   useEffect(() => {
     if (!activeStore?.id) {
@@ -109,6 +116,24 @@ const SettingsPage = () => {
       cancelled = true;
     };
   }, [activeStore?.id, activeStore?.name, activeStore?.address, activeStore?.phone, activeStore?.email]);
+
+  useEffect(() => {
+    if (activeModal !== "notifications" || !activeStore?.id || !userId) return;
+
+    let cancelled = false;
+    setIsLoadingNotificationPreferences(true);
+    void notificationPreferencesService.get(userId, activeStore.id)
+      .then((preferences) => {
+        if (!cancelled) setNotificationPreferences(preferences);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingNotificationPreferences(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeModal, activeStore?.id, userId]);
 
   const openStoreSettings = () => {
     if (!activeStore) {
@@ -149,6 +174,25 @@ const SettingsPage = () => {
       toast.error(error instanceof Error ? error.message : "Unable to save store profile.");
     } finally {
       setIsSavingStore(false);
+    }
+  };
+
+  const updateNotificationPreference = (field: keyof NotificationPreferencesDto, value: boolean) => {
+    setNotificationPreferences((current) => ({ ...current, [field]: value }));
+  };
+
+  const saveNotificationPreferences = async () => {
+    if (!activeStore?.id || !userId || !canManageNotificationPreferences) return;
+    setIsSavingNotificationPreferences(true);
+    try {
+      const saved = await notificationPreferencesService.save(userId, activeStore.id, notificationPreferences);
+      setNotificationPreferences(saved);
+      toast.success("Notification preferences saved.");
+      setActiveModal(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save notification preferences.");
+    } finally {
+      setIsSavingNotificationPreferences(false);
     }
   };
 
@@ -620,52 +664,54 @@ const SettingsPage = () => {
             Notification Preferences
           </span>
         }
-        description="Notification preferences are not yet configured for vendor accounts."
+        description={activeStore ? `Notification preferences for ${activeStore.name}.` : "Select a store to manage notification preferences."}
       >
-        <div className="space-y-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="email-notif" className="text-sm font-medium">Email Notifications</Label>
-              <p className="text-xs text-gray-500">Receive updates via email</p>
+        {isLoadingNotificationPreferences ? (
+          <div className="py-8 text-center text-sm text-gray-500">Loading notification preferences…</div>
+        ) : (
+          <div className="space-y-4 py-2">
+            {[
+              { key: "email_notifications" as const, title: "Email notifications", body: "Send important store updates by email." },
+              { key: "sms_notifications" as const, title: "SMS notifications", body: "Send urgent updates by text message when SMS is available." },
+              { key: "order_updates" as const, title: "Order updates", body: "Notify this store about new orders and order status changes." },
+              { key: "payment_updates" as const, title: "Payment updates", body: "Notify this store about paid, failed, or refunded payments." },
+              { key: "stock_alerts" as const, title: "Stock alerts", body: "Notify this store when inventory needs attention." },
+              { key: "promotions" as const, title: "Promotions", body: "Receive product updates, offers, and growth tips from Printa." },
+            ].map((preference) => (
+              <div key={preference.key} className="flex items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-white p-4">
+                <div className="min-w-0">
+                  <Label htmlFor={preference.key} className="text-sm font-semibold text-gray-900">{preference.title}</Label>
+                  <p className="mt-1 text-xs leading-5 text-gray-500">{preference.body}</p>
+                </div>
+                <Switch
+                  id={preference.key}
+                  checked={notificationPreferences[preference.key]}
+                  onCheckedChange={(checked) => updateNotificationPreference(preference.key, checked)}
+                  disabled={!canManageNotificationPreferences || isSavingNotificationPreferences}
+                  className="data-[state=checked]:bg-printa-red"
+                />
+              </div>
+            ))}
+            {!canManageNotificationPreferences && (
+              <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">You can view notification preferences, but only the owner or an authorized manager can save changes.</p>
+            )}
+            <p className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">These preferences are saved for this user and store. They will sync with the API when server-side preference storage is available.</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setActiveModal(null)} className="rounded-xl" disabled={isSavingNotificationPreferences}>
+                Close
+              </Button>
+              {canManageNotificationPreferences && (
+                <Button
+                  className="bg-printa-red hover:bg-printa-red/90 rounded-xl"
+                  onClick={() => void saveNotificationPreferences()}
+                  disabled={isSavingNotificationPreferences || !activeStore}
+                >
+                  {isSavingNotificationPreferences ? "Saving…" : "Save preferences"}
+                </Button>
+              )}
             </div>
-            <span className="text-xs font-medium text-gray-400">Not configured</span>
           </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="sms-notif" className="text-sm font-medium">SMS Notifications</Label>
-              <p className="text-xs text-gray-500">Receive updates via text message</p>
-            </div>
-            <span className="text-xs font-medium text-gray-400">Not configured</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="order-updates" className="text-sm font-medium">Order Updates</Label>
-              <p className="text-xs text-gray-500">Get notified about order status changes</p>
-            </div>
-            <span className="text-xs font-medium text-gray-400">Not configured</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="promotions" className="text-sm font-medium">Promotions & Offers</Label>
-              <p className="text-xs text-gray-500">Receive special deals and discounts</p>
-            </div>
-            <span className="text-xs font-medium text-gray-400">Not configured</span>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setActiveModal(null)} className="rounded-xl">
-            Cancel
-          </Button>
-          <Button
-            className="bg-printa-red hover:bg-printa-red/90 rounded-xl"
-            onClick={() => {
-              toast.error("Notification preferences are not configured for vendor accounts yet.");
-              setActiveModal(null);
-            }}
-          >
-            Save changes
-          </Button>
-        </div>
+        )}
       </ResponsiveModal>
 
       {/* Privacy Settings Modal */}

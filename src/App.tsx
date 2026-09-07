@@ -143,7 +143,7 @@ const App = () => {
                   <Route path="/dashboard/profile" element={<ProtectedRoute routeScope="root"><Profile /></ProtectedRoute>} />
                   <Route path="/dashboard/profile/edit" element={<ProtectedRoute routeScope="root"><EditProfile /></ProtectedRoute>} />
                   <Route path="/dashboard/payment-methods" element={<ProtectedRoute routeScope="root"><PaymentMethods /></ProtectedRoute>} />
-                  <Route path="/dashboard/settings" element={<ProtectedRoute routeScope="store" requiredPermission="manage_settings"><Settings /></ProtectedRoute>} />
+                  <Route path="/dashboard/settings" element={<ProtectedRoute routeScope="store" requiredPermissions={["manage_settings", "edit_store_settings"]} requiresAny><Settings /></ProtectedRoute>} />
                   <Route path="/dashboard/support" element={<ProtectedRoute routeScope="root"><Support /></ProtectedRoute>} />
                   <Route path="/dashboard/feedback" element={<ProtectedRoute routeScope="root"><Feedback /></ProtectedRoute>} />
                   <Route path="/dashboard/job/:id" element={<ProtectedRoute routeScope="store"><JobDetails /></ProtectedRoute>} />

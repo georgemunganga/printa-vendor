@@ -146,7 +146,8 @@ export const SECONDARY_NAV_ITEMS: NavItem[] = [
     icon: Settings,
     name: "Store Settings",
     path: "/dashboard/settings",
-    requiredPermissions: ["manage_settings"],
+    requiredPermissions: ["manage_settings", "edit_store_settings"],
+    requiresAny: true,
     requiresStore: true,
   },
   {
