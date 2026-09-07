@@ -17,6 +17,7 @@ import {
   Presentation,
 } from "lucide-react";
 import { PrintJob } from "@/types";
+import { formatMoney } from "@/lib/money";
 
 interface IncomingJobCardProps {
   job: PrintJob;
@@ -149,7 +150,7 @@ export const IncomingJobCard: React.FC<IncomingJobCardProps> = ({
       {/* Price + countdown */}
       <div className="flex items-center justify-between mb-3 pr-24">
         <span className="text-3xl font-bold text-gray-900">
-          K{job.totalPrice.toFixed(2)}
+          {formatMoney(job.totalPrice, job.currency)}
         </span>
         {job.acceptDeadline && (
           <div

@@ -2,6 +2,7 @@ import React from "react";
 import { CheckCircle, Clock, FileText, Truck, XCircle, ChevronRight, Navigation, MessageCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { PrintJob } from "@/types";
+import { formatMoney } from "@/lib/money";
 
 interface OrderCardProps {
   order: PrintJob;
@@ -66,7 +67,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
             {status.label}
           </span>
           <span className="text-lg font-bold text-gray-900">
-            ${order.totalPrice.toFixed(2)}
+            {formatMoney(order.totalPrice, order.currency)}
           </span>
         </div>
 

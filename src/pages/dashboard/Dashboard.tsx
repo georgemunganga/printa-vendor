@@ -12,29 +12,18 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { motion } from "framer-motion";
 import { useStore } from "@/context/store-context";
 import { ordersService } from "@/services/orders.service";
-import type { OrderDto, OrderStatusDto } from "@/services/contracts";
-import { getOrderKind } from "@/lib/order-kind";
+import type { PrintJob } from "@/types";
+import { formatMoney } from "@/lib/money";
+import { mapOrderToPrintJob } from "@/lib/print-job";
 
-type DashboardOrder = {
-  id: string;
-  fileName: string;
-  status: "pending" | "printing" | "ready" | "delivered";
-  totalPrice: number;
-  pageCount: number;
-  copies: number;
-  colorMode: "color" | "bw";
-  printer: { name: string };
-  dueDate?: string;
-  estimatedDelivery?: Date;
-  createdAt: Date;
-  orderKind: "print_job" | "retail_sale";
-};
+type DashboardOrder = PrintJob;
 
 const statusMeta: Record<DashboardOrder["status"], { label: string; accent: string }> = {
   pending: { label: "Processing", accent: "text-amber-600 bg-amber-100" },
   printing: { label: "Printing", accent: "text-sky-600 bg-sky-100" },
   ready: { label: "Ready to Dispatch", accent: "text-emerald-600 bg-emerald-100" },
   delivered: { label: "Delivered", accent: "text-gray-600 bg-gray-100" },
+  cancelled: { label: "Cancelled", accent: "text-rose-600 bg-rose-100" },
 };
 
 const capabilityTiles = [
@@ -63,43 +52,6 @@ const payoutHistory = [
   { label: "Jan 26 · Bank", amount: "$790", status: "Scheduled" },
 ];
 
-const toDashboardStatus = (status: OrderStatusDto): DashboardOrder["status"] => {
-  switch (status) {
-    case "PENDING":
-    case "CONFIRMED":
-      return "pending";
-    case "IN_PRODUCTION":
-      return "printing";
-    case "READY":
-      return "ready";
-    case "DELIVERED":
-      return "delivered";
-    case "CANCELLED":
-      return "delivered";
-  }
-};
-
-const mapOrder = (order: OrderDto): DashboardOrder => {
-  const copies = order.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
-  const orderKind = getOrderKind(order);
-  const createdAt = new Date(order.created_at);
-  const updatedAt = new Date(order.updated_at);
-  return {
-    id: order.id,
-    fileName: `${order.order_number} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
-    status: toDashboardStatus(order.status),
-    totalPrice: order.total,
-    pageCount: copies,
-    copies,
-    colorMode: "color",
-    printer: { name: orderKind === "print_job" ? "Production queue" : "Walk-in till" },
-    dueDate: order.status === "READY" ? "Ready now" : undefined,
-    estimatedDelivery: order.status === "READY" || order.status === "IN_PRODUCTION" ? updatedAt : undefined,
-    createdAt,
-    orderKind,
-  };
-};
-
 const Dashboard = () => {
   const { activeStore } = useStore();
   const [orders, setOrders] = useState<DashboardOrder[]>([]);
@@ -118,7 +70,7 @@ const Dashboard = () => {
       if (!cancelled) setIsLoading(true);
       try {
         const liveOrders = await ordersService.listByStore(activeStore.id);
-        if (!cancelled) setOrders(liveOrders.map(mapOrder));
+        if (!cancelled) setOrders(liveOrders.map((order) => mapOrderToPrintJob(order)));
       } catch {
         if (!cancelled) setOrders([]);
       } finally {
@@ -165,7 +117,7 @@ const Dashboard = () => {
       },
       {
         label: "Earnings (7d)",
-        value: `K${totalEarnings.toFixed(2)}`,
+        value: formatMoney(totalEarnings),
         detail: `${slaConfidence}% SLA compliance`,
         icon: <Shield size={20} className="text-printa-red" />,
       },
@@ -235,7 +187,7 @@ const Dashboard = () => {
                           {status.label}
                         </span>
                         <span className="text-sm font-semibold text-gray-900">
-                          K{order.totalPrice.toFixed(2)}
+                          {formatMoney(order.totalPrice, order.currency)}
                         </span>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-500">

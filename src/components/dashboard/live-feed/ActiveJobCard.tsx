@@ -12,6 +12,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { PrintJob } from "@/types";
+import { formatMoney } from "@/lib/money";
 
 interface ActiveJobCardProps {
   job: PrintJob;
@@ -147,7 +148,7 @@ export const ActiveJobCard: React.FC<ActiveJobCardProps> = ({
       {/* Price */}
       <div className="flex items-center justify-between mt-3 mb-3">
         <span className="text-base font-bold text-gray-900">
-          K{job.totalPrice.toFixed(2)}
+          {formatMoney(job.totalPrice, job.currency)}
         </span>
         {job.acceptedAt && (
           <span className="text-[10px] text-gray-400">

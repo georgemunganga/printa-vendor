@@ -17,7 +17,6 @@ import {
   Mail,
   CheckCircle2,
   ExternalLink,
-  Search,
   Shirt,
   ShoppingCart,
   Tag,
@@ -30,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmptyState, ErrorState, LoadingState, SearchBar } from "@/components/common";
 import { useStore } from "@/context/store-context";
 import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
@@ -399,16 +399,13 @@ const POSPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
-            <input
-              type="text"
-              placeholder="Search services..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-3 rounded-xl bg-white border border-gray-200 text-sm placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-printa-red/20 focus:border-printa-red transition"
-            />
-          </div>
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            placeholder="Search services..."
+            className="mb-4"
+            inputClassName="py-3 placeholder:text-gray-300 focus:ring-2 focus:ring-printa-red/20 focus:border-printa-red"
+          />
 
           <div className="flex gap-1.5 overflow-x-auto pb-4 scrollbar-hide" style={{ scrollbarWidth: "none" }}>
             {categories.map((cat) => {
@@ -460,7 +457,7 @@ const POSPage: React.FC = () => {
                           {svc.name}
                         </p>
                         <p className={`text-xs font-bold mt-1 transition-colors duration-200 ${inOrder ? "text-white/95" : "text-gray-900 group-hover:text-white/95"}`}>
-                          K{svc.price.toFixed(2)}
+                          {formatMoney(svc.price)}
                         </p>
                       </div>
                       <div className={`w-12 h-12 rounded-xl  flex items-center justify-center flex-shrink-0`}>
@@ -509,21 +506,13 @@ const POSPage: React.FC = () => {
           </div>
 
           {filtered.length === 0 && (
-            <div className="text-center py-16 text-gray-300">
-              <Search size={36} className="mx-auto mb-3 opacity-40" />
-              <p className="text-xs font-medium">
-                {catalogueLoading ? "Loading store catalogue..." : catalogueError ? catalogueError : "No live products are available for this store"}
-              </p>
-              {catalogueError && (
-                <button
-                  type="button"
-                  onClick={() => setCatalogueReloadKey((current) => current + 1)}
-                  className="mt-3 text-xs font-semibold text-printa-red hover:underline"
-                >
-                  Try again
-                </button>
-              )}
-            </div>
+            catalogueLoading ? (
+              <LoadingState title="Loading store catalogue…" variant="cards" rows={4} />
+            ) : catalogueError ? (
+              <ErrorState title="Unable to load POS catalogue" message={catalogueError} onRetry={() => setCatalogueReloadKey((current) => current + 1)} />
+            ) : (
+              <EmptyState icon={Package} title="No live products" description="No live products are available for this store." className="bg-white py-16" />
+            )
           )}
         </div>
 

@@ -23,8 +23,9 @@ import { Button } from "@/components/ui/button";
 import { ordersService } from "@/services/orders.service";
 import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
-import type { OrderDto, OrderStatusDto } from "@/services/contracts";
-import { buildStoreProductDisplayMap, getOrderKindFromItems, summarizeOrderItems, type StoreProductDisplayMap } from "@/lib/order-display";
+import { buildStoreProductDisplayMap } from "@/lib/order-display";
+import { getOrderChannelLabel, getOrderKindLabel, mapOrderToPrintJob } from "@/lib/print-job";
+import { formatMoney } from "@/lib/money";
 
 /* ─── Channel filter ─── */
 type ChannelFilter = "all" | "online" | "walk-in";
@@ -49,46 +50,6 @@ const statusFilters: { key: StatusFilter; label: string }[] = [
 const formatDate = (date: Date) =>
   date.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-const toPrintJobStatus = (status: OrderStatusDto): PrintJob["status"] => {
-  switch (status) {
-    case "PENDING":
-    case "CONFIRMED":
-      return "pending";
-    case "IN_PRODUCTION":
-      return "printing";
-    case "READY":
-      return "ready";
-    case "DELIVERED":
-      return "delivered";
-    case "CANCELLED":
-      return "cancelled";
-    default:
-      return "pending";
-  }
-};
-
-const toPrintJob = (order: OrderDto, productByStoreProductId?: StoreProductDisplayMap): PrintJob => {
-  const itemCount = order.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 1;
-  const orderKind = getOrderKindFromItems(order, productByStoreProductId);
-  return {
-    id: order.id,
-    fileName: `${summarizeOrderItems(order, productByStoreProductId)} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
-    status: toPrintJobStatus(order.status),
-    totalPrice: order.total,
-    currency: order.currency,
-    pageCount: itemCount,
-    copies: itemCount,
-    colorMode: "color",
-    printer: { name: orderKind === "print_job" ? "Production queue" : "Walk-in till" },
-    createdAt: new Date(order.created_at),
-    lastUpdated: new Date(order.updated_at),
-    notes: order.notes,
-    orderChannel: order.channel === "POS" ? "walk-in" : "online",
-    backendStatus: order.status,
-    orderKind,
-  };
-};
-
 /* ─── Order Card ─── */
 const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
   const config = statusConfig[order.status] ?? statusConfig.pending;
@@ -108,13 +69,13 @@ const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
             isOnline ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"
           }`}>
             {isOnline ? <Globe size={10} /> : <Store size={10} />}
-            {isOnline ? "Online" : "Walk-in"}
+            {getOrderChannelLabel(order.orderChannel)}
           </span>
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
             isPrintJob ? "bg-red-50 text-printa-red" : "bg-gray-100 text-gray-600"
           }`}>
             <KindIcon size={10} />
-            {isPrintJob ? "Print job" : "Till sale"}
+            {getOrderKindLabel(order.orderKind)}
           </span>
         </div>
         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ${config.badge}`}>
@@ -142,7 +103,7 @@ const OrderGridCard: React.FC<{ order: PrintJob }> = ({ order }) => {
 
       {/* Bottom row: price + date + chevron */}
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-        <span className="text-sm font-bold text-gray-900">K{order.totalPrice.toFixed(2)}</span>
+        <span className="text-sm font-bold text-gray-900">{formatMoney(order.totalPrice, order.currency)}</span>
         <div className="flex items-center gap-1.5 text-xs text-gray-400">
           <span>{formatDate(order.createdAt)}</span>
           <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-400 transition" />
@@ -177,7 +138,7 @@ const OrderHistoryPage: React.FC = () => {
           catalogService.listProducts({ active: true }),
         ]);
         const productMap = buildStoreProductDisplayMap(storeProducts, catalogueProducts);
-        if (!cancelled) setJobs(orders.map((order) => toPrintJob(order, productMap)));
+        if (!cancelled) setJobs(orders.map((order) => mapOrderToPrintJob(order, productMap)));
       } catch {
         if (!cancelled) setJobs(fallbackJobs);
       }

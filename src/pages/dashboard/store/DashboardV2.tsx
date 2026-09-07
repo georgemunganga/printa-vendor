@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Inbox, Layers, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { PrintJob, PrintJobStatus } from "@/types";
-import type { OrderDto, OrderStatusDto } from "@/services/contracts";
+import type { OrderStatusDto } from "@/services/contracts";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { LiveFeedTopBar } from "@/components/dashboard/live-feed/LiveFeedTopBar";
 import {
@@ -12,59 +12,18 @@ import {
 } from "@/components/dashboard/live-feed/LiveFeedFilterBar";
 import { IncomingJobCard } from "@/components/dashboard/live-feed/IncomingJobCard";
 import { ActiveJobCard } from "@/components/dashboard/live-feed/ActiveJobCard";
+import { EmptyState, ErrorState, LoadingState } from "@/components/common";
 import { useStore } from "@/context/store-context";
 import { ordersService } from "@/services/orders.service";
 import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
-import { buildStoreProductDisplayMap, getOrderKindFromItems, summarizeOrderItems, type StoreProductDisplayMap } from "@/lib/order-display";
+import { buildStoreProductDisplayMap } from "@/lib/order-display";
+import { mapOrderToPrintJob } from "@/lib/print-job";
 
 const addHistory = (job: PrintJob, status: PrintJobStatus) => {
   const history = job.statusHistory ? [...job.statusHistory] : [];
   return [...history, { status, timestamp: new Date() }];
 };
-
-const toPrintJobStatus = (status: OrderStatusDto): PrintJobStatus => {
-  switch (status) {
-    case "PENDING":
-      return "pending";
-    case "CONFIRMED":
-    case "IN_PRODUCTION":
-      return "printing";
-    case "READY":
-      return "ready";
-    case "DELIVERED":
-      return "delivered";
-    case "CANCELLED":
-      return "cancelled";
-  }
-};
-
-const mapOrderToPrintJob = (order: OrderDto, productByStoreProductId?: StoreProductDisplayMap): PrintJob => {
-  const items = order.items ?? [];
-  const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
-  const orderKind = getOrderKindFromItems(order, productByStoreProductId);
-  return {
-    id: order.id,
-    fileName: `${summarizeOrderItems(order, productByStoreProductId)} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
-    status: toPrintJobStatus(order.status),
-    totalPrice: order.total,
-    currency: order.currency,
-    pageCount: copies,
-    copies,
-    colorMode: "color",
-    printer: { name: orderKind === "print_job" ? "Production queue" : "Walk-in till" },
-    createdAt: new Date(order.created_at),
-    lastUpdated: new Date(order.updated_at),
-    customerName: order.customer_id ? `Customer ${order.customer_id.slice(0, 8)}` : "Walk-in customer",
-    deliveryType: order.delivery_address ? "rider" : "pickup",
-    orderChannel: order.channel === "POS" ? "walk-in" : "online",
-    notes: order.notes,
-    backendStatus: order.status,
-    orderKind,
-    statusHistory: [{ status: toPrintJobStatus(order.status), timestamp: new Date(order.updated_at) }],
-  };
-};
-
 
 const DashboardV2: React.FC = () => {
   const { activeStore } = useStore();
@@ -73,6 +32,9 @@ const DashboardV2: React.FC = () => {
   const [isOnline, setIsOnline] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  const [jobsError, setJobsError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,10 +43,16 @@ const DashboardV2: React.FC = () => {
       if (!activeStore?.id) {
         if (!cancelled) {
           setJobs([]);
+          setJobsError(null);
+          setIsLoadingJobs(false);
         }
         return;
       }
 
+      if (!cancelled) {
+        setIsLoadingJobs(true);
+        setJobsError(null);
+      }
       try {
         const [orders, storeProducts, catalogueProducts] = await Promise.all([
           ordersService.listByStore(activeStore.id),
@@ -95,18 +63,20 @@ const DashboardV2: React.FC = () => {
         if (!cancelled) {
           setJobs(orders.map((order) => mapOrderToPrintJob(order, productMap)).filter((job) => job.orderKind === "print_job"));
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          // Operational queues must not fabricate orders when the live API is unavailable.
           setJobs([]);
+          setJobsError(error instanceof Error ? error.message : "Unable to load the production queue.");
         }
+      } finally {
+        if (!cancelled) setIsLoadingJobs(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [activeStore?.id]);
+  }, [activeStore?.id, reloadKey]);
 
 
   // ── Job actions ──
@@ -369,24 +339,27 @@ const DashboardV2: React.FC = () => {
             )}
 
             <div className={`space-y-3 ${!isOnline ? "opacity-30 grayscale" : ""}`}>
-              <AnimatePresence mode="popLayout">
-                {incomingJobs.length > 0 ? (
-                  incomingJobs.map((job) => (
-                    <IncomingJobCard
-                      key={job.id}
-                      job={job}
-                      onAccept={handleAccept}
-                      onReject={handleReject}
-                      onPreview={handlePreview}
-                    />
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-gray-100 bg-white">
-                    <Inbox size={36} strokeWidth={1} className="text-gray-200" />
-                    <p className="mt-3 text-sm text-gray-400">No incoming orders</p>
-                  </div>
-                )}
-              </AnimatePresence>
+              {isLoadingJobs ? (
+                <LoadingState variant="cards" rows={2} />
+              ) : jobsError ? (
+                <ErrorState title="Unable to load incoming jobs" message={jobsError} onRetry={() => setReloadKey((key) => key + 1)} />
+              ) : (
+                <AnimatePresence mode="popLayout">
+                  {incomingJobs.length > 0 ? (
+                    incomingJobs.map((job) => (
+                      <IncomingJobCard
+                        key={job.id}
+                        job={job}
+                        onAccept={handleAccept}
+                        onReject={handleReject}
+                        onPreview={handlePreview}
+                      />
+                    ))
+                  ) : (
+                    <EmptyState icon={Inbox} title="No incoming orders" className="border-gray-100 bg-white py-16" />
+                  )}
+                </AnimatePresence>
+              )}
             </div>
           </div>
 
@@ -404,24 +377,27 @@ const DashboardV2: React.FC = () => {
                 {activeJobs.length} jobs
               </span>
             </div>
-            <AnimatePresence mode="popLayout">
-              {activeJobs.length > 0 ? (
-                activeJobs.map((job) => (
-                  <ActiveJobCard
-                    key={job.id}
-                    job={job}
-                    onStartPrint={handleStartPrint}
-                    onMarkReady={handleMarkReady}
-                    onCallRider={handleCallRider}
-                  />
-                ))
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-gray-100 bg-white">
-                  <Layers size={36} strokeWidth={1} className="text-gray-200" />
-                  <p className="mt-3 text-sm text-gray-400">No active jobs</p>
-                </div>
-              )}
-            </AnimatePresence>
+            {isLoadingJobs ? (
+              <LoadingState variant="cards" rows={2} />
+            ) : jobsError ? (
+              <ErrorState title="Unable to load active jobs" message={jobsError} onRetry={() => setReloadKey((key) => key + 1)} />
+            ) : (
+              <AnimatePresence mode="popLayout">
+                {activeJobs.length > 0 ? (
+                  activeJobs.map((job) => (
+                    <ActiveJobCard
+                      key={job.id}
+                      job={job}
+                      onStartPrint={handleStartPrint}
+                      onMarkReady={handleMarkReady}
+                      onCallRider={handleCallRider}
+                    />
+                  ))
+                ) : (
+                  <EmptyState icon={Layers} title="No active jobs" className="border-gray-100 bg-white py-16" />
+                )}
+              </AnimatePresence>
+            )}
           </div>
         </div>
       </motion.div>

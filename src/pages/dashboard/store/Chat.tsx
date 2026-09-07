@@ -4,8 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Check, CheckCheck, MessageCircle, FileText, ExternalLink, Paperclip, X, File, Store } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { PrintJob, PrintJobStatus } from "@/types";
-import type { OrderDto, OrderStatusDto } from "@/services/contracts";
+import { PrintJob } from "@/types";
 import { ordersService } from "@/services/orders.service";
 import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
@@ -15,8 +14,9 @@ import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import { BackButton } from "@/components/dashboard/BackButton";
 import { useStore } from "@/context/store-context";
 import { useAuth } from "@/context/auth-context";
-import { buildStoreProductDisplayMap, getOrderKindFromItems, summarizeOrderItems, type StoreProductDisplayMap } from "@/lib/order-display";
+import { buildStoreProductDisplayMap } from "@/lib/order-display";
 import { formatMoney } from "@/lib/money";
+import { mapOrderToPrintJob } from "@/lib/print-job";
 
 interface Attachment {
   id: string;
@@ -48,50 +48,6 @@ interface ChatThread {
   lastMessageTime: Date;
   unreadCount: number;
 }
-
-const toPrintJobStatus = (status: OrderStatusDto): PrintJobStatus => {
-  switch (status) {
-    case "PENDING":
-      return "pending";
-    case "CONFIRMED":
-    case "IN_PRODUCTION":
-      return "printing";
-    case "READY":
-      return "ready";
-    case "DELIVERED":
-      return "delivered";
-    case "CANCELLED":
-      return "cancelled";
-  }
-};
-
-const mapOrderToPrintJob = (order: OrderDto, productByStoreProductId?: StoreProductDisplayMap): PrintJob => {
-  const items = order.items ?? [];
-  const copies = items.reduce((total, item) => total + item.quantity, 0) || 1;
-  const customerName = order.customer_id ? `Customer ${order.customer_id.slice(0, 8)}` : "Walk-in customer";
-  const orderKind = getOrderKindFromItems(order, productByStoreProductId);
-
-  return {
-    id: order.id,
-    fileName: `${summarizeOrderItems(order, productByStoreProductId)} · ${orderKind === "print_job" ? "Print job" : "Till sale"}`,
-    status: toPrintJobStatus(order.status),
-    totalPrice: order.total,
-    currency: order.currency,
-    pageCount: copies,
-    copies,
-    colorMode: "color",
-    printer: { name: customerName },
-    createdAt: new Date(order.created_at),
-    lastUpdated: new Date(order.updated_at),
-    customerName,
-    deliveryType: order.delivery_address ? "rider" : "pickup",
-    orderChannel: order.channel === "POS" ? "walk-in" : "online",
-    notes: order.notes,
-    backendStatus: order.status,
-    orderKind,
-    statusHistory: [{ status: toPrintJobStatus(order.status), timestamp: new Date(order.updated_at) }],
-  };
-};
 
 const getOrderThreads = (orders: PrintJob[]): ChatThread[] =>
   orders
