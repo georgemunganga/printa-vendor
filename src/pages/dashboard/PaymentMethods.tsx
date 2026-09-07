@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { walletService, type WalletOverviewDto } from "@/services/wallet.service";
+import { LoadingState } from "@/components/common";
 
 const formatWalletAmount = (amountMinor: number, currency = "ZMW") => {
   const amount = amountMinor / 100;
@@ -113,6 +114,9 @@ const PaymentMethodsPage = () => {
             </div>
 
             <div className="border-t border-gray-100 bg-gray-50/70 p-4 md:p-5">
+              {isLoading ? (
+                <LoadingState title="Loading wallet balances…" variant="cards" rows={2} className="sm:grid-cols-2 lg:grid-cols-2" />
+              ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-gray-100 bg-white p-3">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Available balance</p>
@@ -133,6 +137,7 @@ const PaymentMethodsPage = () => {
                   </p>
                 </div>
               </div>
+              )}
 
               {entries.length > 0 && (
                 <div className="mt-3 divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100 bg-white">

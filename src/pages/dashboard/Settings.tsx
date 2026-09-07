@@ -606,7 +606,7 @@ const SettingsPage = () => {
         description={activeStore ? `Public store details for ${activeStore.name}.` : "Select a store to manage its profile."}
       >
         {isLoadingStore ? (
-          <LoadingState title="Loading store profile…" variant="inline" className="justify-center py-8" />
+          <LoadingState title="Loading store profile…" variant="form" rows={4} />
         ) : (
           <div className="space-y-4 py-2">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -666,7 +666,7 @@ const SettingsPage = () => {
         description={activeStore ? `Published availability for ${activeStore.name}.` : "Select a store to manage operating hours."}
       >
         {isLoadingOperatingHours ? (
-          <LoadingState title="Loading operating hours…" variant="inline" className="justify-center py-8" />
+          <LoadingState title="Loading operating hours…" variant="form" rows={5} />
         ) : (
           <div className="space-y-3 py-2">
             <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -815,7 +815,7 @@ const SettingsPage = () => {
         description={activeStore ? `Notification preferences for ${activeStore.name}.` : "Select a store to manage notification preferences."}
       >
         {isLoadingNotificationPreferences ? (
-          <LoadingState title="Loading notification preferences…" variant="inline" className="justify-center py-8" />
+          <LoadingState title="Loading notification preferences…" variant="list" rows={4} />
         ) : (
           <div className="space-y-4 py-2">
             {[
@@ -871,7 +871,7 @@ const SettingsPage = () => {
         description={activeStore ? `Privacy preferences for ${activeStore.name}.` : "Select a store to manage privacy preferences."}
       >
         {isLoadingPrivacyPreferences ? (
-          <LoadingState title="Loading privacy preferences…" variant="inline" className="justify-center py-8" />
+          <LoadingState title="Loading privacy preferences…" variant="list" rows={4} />
         ) : (
           <div className="space-y-4 py-2">
             {[

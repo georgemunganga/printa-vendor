@@ -7,6 +7,7 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/context/auth-context";
 import { billingService, type SubscriptionCheckoutDto, type SubscriptionTierDto } from "@/services/billing.service";
+import { LoadingState } from "@/components/common";
 
 const TIER_PRESENTATION: Record<string, { icon: typeof Shield; accent: "gray" | "red" | "amber" }> = {
   CORE: { icon: Shield, accent: "gray" },
@@ -41,10 +42,15 @@ const SubscriptionPage: React.FC = () => {
   const [requestingCollection, setRequestingCollection] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [collectionRequested, setCollectionRequested] = useState(false);
+  const [isLoadingBilling, setIsLoadingBilling] = useState(true);
 
   const loadBilling = useCallback(async () => {
     const vendorId = user?.businessId;
-    if (!vendorId) return;
+    if (!vendorId) {
+      setIsLoadingBilling(false);
+      return;
+    }
+    setIsLoadingBilling(true);
 
     const [tierResult, subscriptionResult, invoiceResult] = await Promise.allSettled([
       billingService.listTiers(),
@@ -73,6 +79,7 @@ const SubscriptionPage: React.FC = () => {
       setInvoices([]);
       setBillingError("Unable to load billing history.");
     }
+    setIsLoadingBilling(false);
   }, [user?.businessId]);
 
   useEffect(() => {
@@ -199,6 +206,9 @@ const SubscriptionPage: React.FC = () => {
         <div>
           <h3 className="mb-3 text-sm font-semibold text-gray-900">Plan catalogue</h3>
           <p className="mb-3 text-xs text-gray-500">Select a configured plan to pay securely with mobile money. Your plan price is confirmed by Printa before the payment request is sent.</p>
+          {isLoadingBilling ? (
+            <LoadingState title="Loading subscription plans…" variant="cards" rows={2} className="md:grid-cols-2" />
+          ) : (
           <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0">
             {tiers.map((tier, index) => {
               const isCurrent = tier.id === currentTierID;
@@ -257,8 +267,9 @@ const SubscriptionPage: React.FC = () => {
               );
             })}
           </div>
-          {catalogueError && <p className="mt-3 text-center text-xs text-gray-400">{catalogueError}</p>}
-          {!catalogueError && tiers.length === 0 && <p className="mt-3 text-center text-xs text-gray-400">No subscription plans are currently available.</p>}
+          )}
+          {!isLoadingBilling && catalogueError && <p className="mt-3 text-center text-xs text-gray-400">{catalogueError}</p>}
+          {!isLoadingBilling && !catalogueError && tiers.length === 0 && <p className="mt-3 text-center text-xs text-gray-400">No subscription plans are currently available.</p>}
         </div>
 
         <div>

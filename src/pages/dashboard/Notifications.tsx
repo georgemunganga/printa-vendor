@@ -15,6 +15,7 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { toast } from "sonner";
 import { notificationsService } from "@/services/notifications.service";
 import type { NotificationDto } from "@/services/contracts";
+import { LoadingState } from "@/components/common";
 
 interface Notification {
   id: string;
@@ -56,10 +57,12 @@ const Notifications: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "unread">("all");
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
     void (async () => {
       try {
         const response = await notificationsService.list({ limit: 100 });
@@ -72,6 +75,8 @@ const Notifications: React.FC = () => {
           setNotifications([]);
           setLoadError(error instanceof Error ? error.message : "Unable to load notifications.");
         }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     })();
     return () => {
@@ -189,7 +194,9 @@ const Notifications: React.FC = () => {
 
         {/* Notifications List */}
         <div className="space-y-2">
-          {filteredNotifications.length === 0 ? (
+          {isLoading ? (
+            <LoadingState title="Loading notifications…" variant="list" rows={5} />
+          ) : filteredNotifications.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Bell size={28} className="text-gray-400" />

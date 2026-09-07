@@ -18,6 +18,7 @@ import { buildStoreProductDisplayMap } from "@/lib/order-display";
 import { formatMoney } from "@/lib/money";
 import { getOrderChannelLabel, getOrderKindLabel, mapOrderToPrintJob } from "@/lib/print-job";
 import { OrderMoney, OrderStatusBadge } from "@/components/dashboard/order";
+import { LoadingState } from "@/components/common";
 
 interface Attachment {
   id: string;
@@ -166,7 +167,8 @@ const ChatListPanel: React.FC<{
   threads: ChatThread[];
   activeOrderId: string | null;
   onSelectThread: (orderId: string) => void;
-}> = ({ threads, activeOrderId, onSelectThread }) => (
+  isLoading?: boolean;
+}> = ({ threads, activeOrderId, onSelectThread, isLoading = false }) => (
   <div className="h-full flex flex-col bg-white border-r border-gray-200">
     
     <div className="p-4 border-b border-gray-100">
@@ -174,7 +176,9 @@ const ChatListPanel: React.FC<{
       <p className="dashboard-page-subtitle">{threads.length} conversations</p>
     </div>
     <div className="flex-1 overflow-y-auto">
-      {threads.length > 0 ? (
+      {isLoading ? (
+        <LoadingState title="Loading conversations…" variant="list" rows={6} className="rounded-none border-0" />
+      ) : threads.length > 0 ? (
         threads.map((thread) => (
           <ChatListItem
             key={thread.order.id}
@@ -267,7 +271,8 @@ const ChatView: React.FC<{
   onSendMessage: (message: string, attachments?: Attachment[]) => Promise<boolean>;
   onBack?: () => void;
   showBackButton?: boolean;
-}> = ({ order, messages, onSendMessage, onBack, showBackButton }) => {
+  isLoadingMessages?: boolean;
+}> = ({ order, messages, onSendMessage, onBack, showBackButton, isLoadingMessages = false }) => {
   const [newMessage, setNewMessage] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -361,7 +366,9 @@ const ChatView: React.FC<{
 
         {/* Chat Messages */}
         <div className="px-4">
-        {Object.entries(grouped).map(([date, msgs]) => (
+        {isLoadingMessages ? (
+          <LoadingState title="Loading messages…" variant="chat" rows={5} />
+        ) : Object.entries(grouped).map(([date, msgs]) => (
           <div key={date}>
             <div className="flex justify-center my-6">
               <span className="text-xs font-medium text-gray-400 bg-white px-3 py-1 rounded-full shadow-sm">
@@ -577,6 +584,8 @@ const ChatPage = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [storeOrders, setStoreOrders] = useState<PrintJob[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoadingThreads, setIsLoadingThreads] = useState(true);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(orderId ?? null);
   const threads = useMemo(() => getOrderThreads(storeOrders), [storeOrders]);
 
@@ -593,10 +602,12 @@ const ChatPage = () => {
           setStoreOrders([]);
           setMessages([]);
           setActiveOrderId(null);
+          setIsLoadingThreads(false);
         }
         return;
       }
 
+      if (!cancelled) setIsLoadingThreads(true);
       try {
         const [orders, storeProducts, catalogueProducts] = await Promise.all([
           ordersService.listByStore(activeStore.id),
@@ -615,6 +626,8 @@ const ChatPage = () => {
           setMessages([]);
           setActiveOrderId(null);
         }
+      } finally {
+        if (!cancelled) setIsLoadingThreads(false);
       }
     })();
 
@@ -628,9 +641,11 @@ const ChatPage = () => {
 
     if (!activeOrderId) {
       setMessages([]);
+      setIsLoadingMessages(false);
       return;
     }
 
+    setIsLoadingMessages(true);
     void (async () => {
       try {
         const liveMessages = await conversationService.listMessages(activeOrderId);
@@ -642,6 +657,8 @@ const ChatPage = () => {
         if (!cancelled) {
           setMessages([]);
         }
+      } finally {
+        if (!cancelled) setIsLoadingMessages(false);
       }
     })();
 
@@ -715,6 +732,7 @@ const ChatPage = () => {
             threads={threads}
             activeOrderId={activeOrderId}
             onSelectThread={handleSelectThread}
+            isLoading={isLoadingThreads}
           />
         </div>
 
@@ -727,7 +745,12 @@ const ChatPage = () => {
               onSendMessage={handleSendMessage}
               onBack={handleBack}
               showBackButton={true}
+              isLoadingMessages={isLoadingMessages}
             />
+          ) : isLoadingThreads && activeOrderId ? (
+            <div className="h-full bg-white pt-20">
+              <LoadingState title="Loading conversation…" variant="chat" rows={6} className="mx-auto max-w-2xl" />
+            </div>
           ) : (
             <EmptyState />
           )}

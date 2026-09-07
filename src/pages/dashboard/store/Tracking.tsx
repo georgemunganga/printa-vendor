@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useStore } from "@/context/store-context";
 import { ordersService } from "@/services/orders.service";
 import type { OrderDto } from "@/services/contracts";
+import { LoadingState } from "@/components/common";
 
 const MapPicker = lazy(() => import("@/components/MapPicker"));
 
@@ -30,22 +31,29 @@ const TrackingPage = () => {
   const [showPanel, setShowPanel] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [storeOrders, setStoreOrders] = useState<OrderDto[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
       if (!activeStore?.id) {
-        if (!cancelled) setStoreOrders([]);
+        if (!cancelled) {
+          setStoreOrders([]);
+          setIsLoadingOrders(false);
+        }
         return;
       }
 
+      if (!cancelled) setIsLoadingOrders(true);
       try {
         const orders = await ordersService.listByStore(activeStore.id);
         if (!cancelled) setStoreOrders(orders);
       } catch {
         // Tracking must remain empty rather than displaying fabricated delivery work.
         if (!cancelled) setStoreOrders([]);
+      } finally {
+        if (!cancelled) setIsLoadingOrders(false);
       }
     })();
 
@@ -76,15 +84,17 @@ const TrackingPage = () => {
 
   const mapFallback = (
     <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <div className="w-12 h-12 border-4 border-printa-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-sm text-gray-500">Loading map...</p>
-      </div>
+      <LoadingState title="Loading map…" className="w-[min(90%,24rem)]" />
     </div>
   );
 
   return (
     <div className="h-screen w-screen relative overflow-hidden bg-gray-100">
+      {isLoadingOrders && (
+        <div className="absolute left-4 right-4 top-24 z-40 md:left-auto md:right-6 md:w-[360px]">
+          <LoadingState title="Loading active orders…" variant="list" rows={3} />
+        </div>
+      )}
       {/* Dashboard Sidebar - Desktop Only */}
       <DashboardSidebar
         isOpen={isSidebarOpen}

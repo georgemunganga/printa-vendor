@@ -25,6 +25,7 @@ import { inventoryService } from "@/services/inventory.service";
 import { vendorService } from "@/services/vendor.service";
 import { vendorPolicyService, type VendorPolicyConsentStatusDto } from "@/services/vendor-policy.service";
 import { AddStoreWizardModal } from "@/components/dashboard/AddStoreWizardModal";
+import { LoadingState } from "@/components/common";
 
 interface StoreFormState {
   businessName: string;
@@ -323,7 +324,7 @@ const StoresPage: React.FC = () => {
       </div>
 
       {isHydrating ? (
-        <div className="text-sm text-gray-500">Loading stores...</div>
+        <LoadingState title="Loading stores…" variant="cards" rows={4} className="grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" />
       ) : stores.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {stores.map((store, index) => {

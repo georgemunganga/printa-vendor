@@ -100,4 +100,25 @@ test.describe("authenticated vendor session", () => {
     expect(pageErrors).toEqual([]);
     expect(serverErrors).toEqual([]);
   });
+
+  test("shows reusable skeletons while vendor data is pending", async ({ page }) => {
+    test.skip(!vendorStoreId, "Set PLAYWRIGHT_VENDOR_STORE_ID to test store-scoped routes.");
+    await installVendorSession(page);
+
+    await page.route("**/api/v1/notifications/**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await route.continue();
+    });
+    await page.goto("/dashboard/notifications");
+    await expect(page.getByLabel("Loading notifications…")).toBeVisible();
+    await expect(page.getByLabel("Loading notifications…")).toBeHidden();
+
+    await page.route("**/api/v1/orders/store/**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await route.continue();
+    });
+    await page.goto("/dashboard/chat");
+    await expect(page.getByLabel("Loading conversations…")).toBeVisible();
+    await expect(page.getByLabel("Loading conversations…")).toBeHidden();
+  });
 });

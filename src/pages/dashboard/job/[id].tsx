@@ -112,7 +112,7 @@ const JobDetailsPage = () => {
   if (isLoading) {
     return (
       <DashboardLayout pageTitle="Job Details">
-        <LoadingState title="Loading order…" description="Fetching the latest order details from Printa." />
+        <LoadingState title="Loading order…" description="Fetching the latest order details from Printa." variant="detail" rows={5} />
       </DashboardLayout>
     );
   }

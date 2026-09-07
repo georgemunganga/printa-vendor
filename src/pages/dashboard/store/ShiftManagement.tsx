@@ -8,6 +8,7 @@ import { useAuth } from "@/context/auth-context";
 import { useStore } from "@/context/store-context";
 import { useStoreStaffQuery } from "@/query/hooks";
 import { attendanceService } from "@/services/attendance.service";
+import { LoadingState } from "@/components/common";
 
 type Employee = {
   id: string;
@@ -307,7 +308,7 @@ const ShiftManagement: React.FC = () => {
 
           <div className="space-y-2">
             {isLoadingStaff ? (
-              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-5 text-sm text-gray-400">Loading staff directory…</div>
+              <LoadingState title="Loading staff directory…" variant="list" rows={4} />
             ) : scopedEmployees.length === 0 ? (
               <div className="rounded-2xl border border-gray-200 bg-white px-4 py-5 text-sm text-gray-400">No staff members are assigned to this store yet.</div>
             ) : (
