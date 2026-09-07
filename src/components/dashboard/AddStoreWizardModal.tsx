@@ -243,7 +243,7 @@ export function AddStoreWizardModal({ open, vendorId, draftOwnerId, setupBusines
     setHours((current) => ({ ...current, [day]: { ...current[day], [field]: value } }));
   };
 
-  const validLocation = (!setupBusiness || businessName.trim().length >= 2) && draft.name.trim().length >= 2 && draft.address.trim().length >= 2 && draft.city.trim().length >= 2 && draft.country.trim().length >= 2;
+  const validLocation = (!setupBusiness || (businessName.trim().length >= 2 && taxId.trim().length >= 2)) && draft.name.trim().length >= 2 && draft.address.trim().length >= 2 && draft.city.trim().length >= 2 && draft.country.trim().length >= 2;
   const hasHours = DAYS.some(({ key }) => hours[key].enabled);
   const mapCenter = draft.latitude !== null && draft.longitude !== null ? { lat: draft.latitude, lng: draft.longitude } : LUSAKA_CENTER;
   const reviewLocation = draft.address.includes(draft.city) && draft.address.includes(draft.country)
@@ -276,7 +276,7 @@ export function AddStoreWizardModal({ open, vendorId, draftOwnerId, setupBusines
       if (setupBusiness) {
         const vendor = await vendorService.onboard({
           business_name: businessName.trim(),
-          tax_id: taxId.trim() || undefined,
+          tax_id: taxId.trim(),
           store_name: draft.name.trim(),
           store_address: draft.address.trim(),
           store_city: draft.city.trim(),
@@ -379,7 +379,7 @@ export function AddStoreWizardModal({ open, vendorId, draftOwnerId, setupBusines
                 <div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-50 text-printa-red"><MapPin size={16} /></div><h2 className="text-xl font-bold text-gray-900">Where is this store?</h2></div>
                 <p className="ml-11 mt-1 text-sm text-gray-400">{setupBusiness ? "Start with your business, then search for the first store address or tap the map to drop a pin." : "Search for the address or tap the map to drop a pin."}</p>
               </div>
-              {setupBusiness && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="Business name" className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" /><input value={taxId} onChange={(event) => setTaxId(event.target.value)} placeholder="Tax ID (optional)" className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" /></div>}
+              {setupBusiness && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="Business name" className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" /><input value={taxId} onChange={(event) => setTaxId(event.target.value)} placeholder="TPIN / Tax ID" className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" /></div>}
               <input value={draft.name} onChange={(event) => updateDraft({ name: event.target.value })} placeholder={setupBusiness ? "First store name (e.g. Main Branch)" : "Store name (e.g. Main Branch)"} className="h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-base focus:border-printa-red focus:outline-none focus:ring-2 focus:ring-printa-red/40" />
               <div className="relative">
                 <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />

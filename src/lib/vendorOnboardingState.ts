@@ -11,6 +11,7 @@ export interface VendorOnboardingState {
 
   // Step 1: Business name
   businessName: string;
+  taxId: string;
 
   // Step 2: First store
   storeName: string;
@@ -58,6 +59,7 @@ const COMPLETED_KEY = "vendor_onboarding_completed_v1";
 const defaultState: VendorOnboardingState = {
   step: 0,
   businessName: "",
+  taxId: "",
   storeName: "",
   storeAddress: "",
   storeCity: "",

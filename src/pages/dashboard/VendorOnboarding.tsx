@@ -155,7 +155,7 @@ const VendorOnboarding: React.FC = () => {
   const canContinue = (): boolean => {
     switch (step) {
       case 0: return true;
-      case 1: return data.businessName.trim().length >= 2;
+      case 1: return data.businessName.trim().length >= 2 && data.taxId.trim().length >= 2;
       case 2:
         return data.storeName.trim().length >= 2 &&
           data.storeAddress.trim().length >= 2 &&
@@ -527,7 +527,7 @@ const VendorOnboarding: React.FC = () => {
                     </h1>
                   </div>
                   <p className="text-sm text-gray-400 mt-1 ml-11">
-                    This is how customers will find you on Printa.
+                    Add the legal details Printa needs to create your vendor profile.
                   </p>
 
                   <input
@@ -544,7 +544,14 @@ const VendorOnboarding: React.FC = () => {
                     }}
                     placeholder="e.g. FastPrint Lusaka"
                     className="mt-8 h-14 rounded-xl border border-gray-200 px-4 text-lg focus:outline-none focus:ring-2 focus:ring-printa-red/40 focus:border-printa-red bg-white"
-                    onKeyDown={(e) => e.key === "Enter" && next()}
+                  />
+
+                  <input
+                    value={data.taxId}
+                    onChange={(e) => set({ taxId: e.target.value })}
+                    placeholder="TPIN / Tax ID"
+                    className="mt-3 h-14 rounded-xl border border-gray-200 px-4 text-lg focus:outline-none focus:ring-2 focus:ring-printa-red/40 focus:border-printa-red bg-white"
+                    onKeyDown={(e) => e.key === "Enter" && canContinue() && next()}
                   />
 
                   {/* Live preview */}
@@ -561,7 +568,7 @@ const VendorOnboarding: React.FC = () => {
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900">{data.businessName.trim()}</p>
-                          <p className="text-xs text-gray-400">Printing Services</p>
+                          <p className="text-xs text-gray-400">{data.taxId.trim() ? `Tax ID ${data.taxId.trim()}` : "Tax ID required"}</p>
                         </div>
                       </div>
                     </motion.div>

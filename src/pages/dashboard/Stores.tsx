@@ -175,6 +175,10 @@ const StoresPage: React.FC = () => {
       toast.error("Business name is required to create your vendor profile.");
       return;
     }
+    if (requiresProfileSetup && !form.taxId.trim()) {
+      toast.error("Tax ID is required to create your vendor profile.");
+      return;
+    }
     if (requiresProfileSetup && isPolicyLoading) {
       toast.error("Please wait while Printa checks the current vendor policies.");
       return;
@@ -205,7 +209,7 @@ const StoresPage: React.FC = () => {
       if (requiresProfileSetup) {
         const vendor = await vendorService.onboard({
           business_name: form.businessName.trim(),
-          tax_id: form.taxId.trim() || undefined,
+          tax_id: form.taxId.trim(),
         });
         updateUser({ businessId: vendor.id, businessName: vendor.business_name });
         profileCreated = true;

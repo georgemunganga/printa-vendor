@@ -45,7 +45,7 @@ export interface VendorProfileDto {
 
 export interface OnboardVendorDto {
   business_name: string;
-  tax_id?: string;
+  tax_id: string;
   store_name?: string;
   store_address?: string;
   store_city?: string;

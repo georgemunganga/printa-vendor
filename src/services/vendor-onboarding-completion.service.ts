@@ -22,6 +22,7 @@ export const completePendingVendorOnboarding = async (): Promise<VendorProfileDt
 
   return vendorService.onboard({
     business_name: requireValue(state.businessName, "Business name"),
+    tax_id: requireValue(state.taxId, "Tax ID"),
     store_name: requireValue(state.storeName, "Store name"),
     store_address: requireValue(state.storeAddress, "Store address"),
     store_city: requireValue(state.storeCity, "Store city"),
