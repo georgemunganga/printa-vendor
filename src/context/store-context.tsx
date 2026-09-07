@@ -6,6 +6,32 @@ import type { StoreDto } from "@/services/contracts";
 import { loadOfflineSnapshot, offlineKeys, saveOfflineSnapshot } from "@/lib/offline-store";
 
 const SHIFT_UNLOCK_STORAGE_PREFIX = "printa_shift_unlock_v1";
+const ACTIVE_STORE_ID_STORAGE_KEY = "printa_active_store_id";
+const ACTIVE_STORE_SNAPSHOT_STORAGE_KEY = "printa_active_store_snapshot_v1";
+
+const loadPersistedActiveStore = (): Store | null => {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(ACTIVE_STORE_SNAPSHOT_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Store;
+    return parsed?.id ? parsed : null;
+  } catch {
+    localStorage.removeItem(ACTIVE_STORE_SNAPSHOT_STORAGE_KEY);
+    return null;
+  }
+};
+
+const persistActiveStore = (store: Store | null) => {
+  if (typeof window === "undefined") return;
+  if (!store) {
+    localStorage.removeItem(ACTIVE_STORE_ID_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_STORE_SNAPSHOT_STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(ACTIVE_STORE_ID_STORAGE_KEY, store.id);
+  localStorage.setItem(ACTIVE_STORE_SNAPSHOT_STORAGE_KEY, JSON.stringify(store));
+};
 
 interface StoreContextValue {
   activeStore: Store | null;
@@ -23,8 +49,8 @@ interface StoreContextValue {
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isAuthenticated, setActiveStoreScope } = useAuth();
-  const [activeStore, setActiveStoreState] = useState<Store | null>(null);
+  const { user, isAuthenticated, isAuthLoading, setActiveStoreScope } = useAuth();
+  const [activeStore, setActiveStoreState] = useState<Store | null>(() => loadPersistedActiveStore());
   const [availableStores, setAvailableStores] = useState<Store[]>([]);
   // Start in hydrating mode to avoid premature route-guard redirects
   // before persisted store context is restored.
@@ -34,10 +60,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isOffline, setIsOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine);
 
   const refreshStores = useCallback(async () => {
+    if (isAuthLoading) {
+      setIsHydrating(true);
+      return;
+    }
+
     if (!user || !isAuthenticated) {
       setAvailableStores([]);
       setActiveStoreState(null);
       setActiveStoreScope(null);
+      persistActiveStore(null);
       setDataSource("none");
       setLastSyncedAt(null);
       setIsHydrating(false);
@@ -65,17 +97,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const syncedAt = Date.now();
       setLastSyncedAt(syncedAt);
       void saveOfflineSnapshot(offlineKeys.stores(user.id), resolvedStores).catch(() => undefined);
-      const savedId = localStorage.getItem("printa_active_store_id");
+      const savedId = localStorage.getItem(ACTIVE_STORE_ID_STORAGE_KEY);
       const savedStore = savedId ? resolvedStores.find((s) => s.id === savedId) ?? null : null;
-      setActiveStoreState((previousStore) => {
-        if (previousStore && resolvedStores.some((store) => store.id === previousStore.id)) {
-          return previousStore;
-        }
-        if (savedStore) return savedStore;
-        if (resolvedStores.length === 1) return resolvedStores[0];
-        return null;
-      });
-      if (resolvedStores.length === 0) localStorage.removeItem("printa_active_store_id");
+      const previousStore = activeStore ? resolvedStores.find((store) => store.id === activeStore.id) ?? null : null;
+      const nextActiveStore = previousStore ?? savedStore ?? (resolvedStores.length === 1 ? resolvedStores[0] : null);
+      setActiveStoreState(nextActiveStore);
+      persistActiveStore(nextActiveStore);
     } catch {
       // Never substitute mock records for an unavailable API. Show only the last successful
       // device-local snapshot, clearly marked as offline; otherwise leave operational scope empty.
@@ -84,20 +111,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setAvailableStores(cached.value);
         setDataSource("offline");
         setLastSyncedAt(cached.savedAt);
-        const savedId = localStorage.getItem("printa_active_store_id");
+        const savedId = localStorage.getItem(ACTIVE_STORE_ID_STORAGE_KEY);
         const savedStore = savedId ? cached.value.find((store) => store.id === savedId) ?? null : null;
-        setActiveStoreState(savedStore ?? (cached.value.length === 1 ? cached.value[0] : null));
+        const offlineStore = savedStore ?? (cached.value.length === 1 ? cached.value[0] : null);
+        setActiveStoreState(offlineStore);
+        persistActiveStore(offlineStore);
       } else {
         setAvailableStores([]);
         setActiveStoreState(null);
         setDataSource("none");
         setLastSyncedAt(null);
-        localStorage.removeItem("printa_active_store_id");
+        persistActiveStore(null);
       }
     } finally {
       setIsHydrating(false);
     }
-  }, [user, isAuthenticated]);
+  }, [user, isAuthenticated, isAuthLoading, activeStore, setActiveStoreScope]);
 
   useEffect(() => {
     void refreshStores();
@@ -118,8 +147,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [refreshStores]);
 
   useEffect(() => {
+    if (isHydrating && !activeStore?.id) return;
     setActiveStoreScope(activeStore?.id ?? null);
-  }, [activeStore?.id, setActiveStoreScope]);
+  }, [activeStore?.id, isHydrating, setActiveStoreScope]);
 
   const clearStoreUnlock = (storeId: string | null | undefined) => {
     if (!storeId || !user || typeof window === "undefined") return;
@@ -153,11 +183,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     setActiveStoreState(store);
     setActiveStoreScope(store?.id ?? null);
-    if (store) {
-      localStorage.setItem("printa_active_store_id", store.id);
-    } else {
-      localStorage.removeItem("printa_active_store_id");
-    }
+    persistActiveStore(store);
   };
 
   const isStoreSelected = Boolean(activeStore);
