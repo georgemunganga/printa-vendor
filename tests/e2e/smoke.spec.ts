@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+const apiUrl = (path: string) => `${process.env.PLAYWRIGHT_API_BASE_URL ?? ""}${path}`;
+
 test("loads the vendor frontend", async ({ page }) => {
   await page.goto("/");
 
@@ -17,8 +19,8 @@ test("shows the live public vendor plans", async ({ page }) => {
   await expect(page.getByText(/coming soon/i)).toHaveCount(0);
 });
 
-test("local-test proxy reaches the live API health endpoint", async ({ request }) => {
-  const response = await request.get("/readyz");
+test("reaches the live API health endpoint", async ({ request }) => {
+  const response = await request.get(apiUrl("/readyz"));
   expect(response.ok()).toBe(true);
 
   const body = await response.json();
@@ -31,14 +33,14 @@ test("local-test proxy reaches the live API health endpoint", async ({ request }
 });
 
 test("protected vendor profile requires authentication", async ({ request }) => {
-  const response = await request.get("/api/v1/vendor/profile");
+  const response = await request.get(apiUrl("/api/v1/vendor/profile"));
 
   expect(response.status()).toBe(401);
   await expect(response.text()).resolves.toContain("missing Authorization header");
 });
 
 test("current user endpoint requires authentication", async ({ request }) => {
-  const response = await request.get("/api/v1/users/me");
+  const response = await request.get(apiUrl("/api/v1/users/me"));
 
   expect(response.status()).toBe(401);
   await expect(response.text()).resolves.toContain("missing Authorization header");
