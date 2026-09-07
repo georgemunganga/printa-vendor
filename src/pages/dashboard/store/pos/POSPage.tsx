@@ -28,11 +28,14 @@ import { POSOrderSummary, POSRightOrderPanel } from "@/components/dashboard/pos/
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useStore } from "@/context/store-context";
 import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
 import { ordersService } from "@/services/orders.service";
 import { posService } from "@/services/pos.service";
+import { commsService } from "@/services/comms.service";
 import { isPrintProduct, orderKindNote } from "@/lib/order-kind";
 import { formatMoney } from "@/lib/money";
 import type { OrderDto } from "@/services/contracts";
@@ -106,6 +109,9 @@ const POSPage: React.FC = () => {
   const [catalogueReloadKey, setCatalogueReloadKey] = useState(0);
   const [isCharging, setIsCharging] = useState(false);
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
+  const [receiptEmail, setReceiptEmail] = useState("");
+  const [showEmailReceiptForm, setShowEmailReceiptForm] = useState(false);
+  const [isSendingReceipt, setIsSendingReceipt] = useState(false);
 
   const servicesForStore = liveServices;
 
@@ -279,19 +285,73 @@ const POSPage: React.FC = () => {
     receiptWindow.print();
   };
 
-  const emailReceipt = () => {
-    if (!completedSale) return;
-    const subject = encodeURIComponent(`Receipt ${completedSale.order.order_number}`);
-    const body = encodeURIComponent([
-      `${activeStore?.name ?? "Printa Vendor"} receipt`,
-      `Order: ${completedSale.order.order_number}`,
-      `Total: ${formatMoney(completedSale.order.total, completedSale.order.currency)}`,
-      `Payment: ${completedSale.paymentMethod === "ewallet" ? "E-Wallet" : completedSale.paymentMethod === "cash" ? "Cash" : "Debit Card"}`,
-      "",
-      "Items:",
-      ...completedSale.lines.map((line) => `- ${line.qty} x ${line.service.name} = ${formatMoney(line.service.price * line.qty, completedSale.order.currency)}`),
-    ].join("\n"));
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  const buildReceiptText = (sale: CompletedSale) => [
+    `${activeStore?.name ?? "Printa Vendor"} receipt`,
+    `Order: ${sale.order.order_number}`,
+    `Total: ${formatMoney(sale.order.total, sale.order.currency)}`,
+    `Payment: ${sale.paymentMethod === "ewallet" ? "E-Wallet" : sale.paymentMethod === "cash" ? "Cash" : "Debit Card"}`,
+    sale.requiresProduction ? "Type: Print job" : "Type: Till sale",
+    "",
+    "Items:",
+    ...sale.lines.map((line) => `- ${line.qty} x ${line.service.name} = ${formatMoney(line.service.price * line.qty, sale.order.currency)}`),
+  ].join("\n");
+
+  const buildReceiptHtml = (sale: CompletedSale) => {
+    const rows = sale.lines
+      .map((line) => `
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e5e7eb;">${escapeReceiptText(line.service.name)}</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:center;">${line.qty}</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;">${formatMoney(line.service.price * line.qty, sale.order.currency)}</td>
+        </tr>`)
+      .join("");
+
+    return `
+      <div style="font-family:Arial,sans-serif;color:#111827;line-height:1.5;max-width:560px;margin:0 auto;">
+        <div style="background:#111827;color:white;border-radius:20px;padding:20px;margin-bottom:18px;">
+          <div style="font-size:12px;text-transform:uppercase;color:rgba(255,255,255,.65);letter-spacing:.08em;">${escapeReceiptText(activeStore?.name ?? "Printa Vendor")}</div>
+          <h1 style="font-size:22px;margin:6px 0 2px;">Receipt ${escapeReceiptText(sale.order.order_number)}</h1>
+          <div style="font-size:13px;color:rgba(255,255,255,.7);">${sale.completedAt.toLocaleString()}</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          <thead><tr><th align="left">Item</th><th>Qty</th><th align="right">Total</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div style="display:flex;justify-content:space-between;font-size:20px;font-weight:700;margin-top:18px;padding-top:14px;border-top:2px solid #111827;">
+          <span>Total paid</span><span>${formatMoney(sale.order.total, sale.order.currency)}</span>
+        </div>
+        <p style="font-size:13px;color:#6b7280;">Payment: ${sale.paymentMethod === "ewallet" ? "E-Wallet" : sale.paymentMethod === "cash" ? "Cash" : "Debit Card"}</p>
+        <p style="font-size:13px;color:#6b7280;">${sale.requiresProduction ? "Your print job has been added to the production queue." : "Your till sale has been recorded."}</p>
+      </div>`;
+  };
+
+  const isValidReceiptEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(receiptEmail.trim());
+
+  const sendReceiptEmail = async () => {
+    if (!completedSale || !isValidReceiptEmail || isSendingReceipt) return;
+    setIsSendingReceipt(true);
+    try {
+      await commsService.send({
+        channel: "EMAIL",
+        recipient: receiptEmail.trim(),
+        subject: `Receipt ${completedSale.order.order_number} from ${activeStore?.name ?? "Printa Vendor"}`,
+        body: buildReceiptText(completedSale),
+        html_body: buildReceiptHtml(completedSale),
+        metadata: {
+          type: "POS_RECEIPT",
+          order_id: completedSale.order.id,
+          order_number: completedSale.order.order_number,
+          store_id: activeStore?.id ?? completedSale.order.store_id,
+        },
+      }, `pos-receipt-${completedSale.order.id}-${receiptEmail.trim().toLowerCase()}`);
+      toast.success(`Receipt sent to ${receiptEmail.trim()}`);
+      setShowEmailReceiptForm(false);
+      setReceiptEmail("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send the receipt email.");
+    } finally {
+      setIsSendingReceipt(false);
+    }
   };
 
   return (
@@ -487,7 +547,7 @@ const POSPage: React.FC = () => {
 
       <ResponsiveModal
         open={Boolean(completedSale)}
-        onOpenChange={(open) => { if (!open) setCompletedSale(null); }}
+        onOpenChange={(open) => { if (!open) { setCompletedSale(null); setShowEmailReceiptForm(false); setReceiptEmail(""); } }}
         className="sm:max-w-lg"
         title={
           <span className="flex items-center gap-2">
@@ -538,7 +598,7 @@ const POSPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={emailReceipt}
+                onClick={() => setShowEmailReceiptForm((current) => !current)}
                 className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white p-4 text-sm font-bold text-gray-900 transition hover:border-printa-red/40 hover:bg-printa-red/5 hover:text-printa-red"
               >
                 <Mail size={22} className="mb-2" />
@@ -546,8 +606,60 @@ const POSPage: React.FC = () => {
               </button>
             </div>
 
+
+
+            {showEmailReceiptForm && (
+              <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
+                <div className="space-y-2">
+                  <Label htmlFor="receipt-email" className="text-sm font-semibold text-gray-900">
+                    Customer email
+                  </Label>
+                  <Input
+                    id="receipt-email"
+                    type="email"
+                    value={receiptEmail}
+                    onChange={(event) => setReceiptEmail(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void sendReceiptEmail();
+                      }
+                    }}
+                    placeholder="customer@example.com"
+                    autoFocus
+                    className="h-12 bg-white"
+                  />
+                  <p className="text-xs text-gray-500">
+                    The receipt will be sent by Printa, not by opening the device email app.
+                  </p>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setShowEmailReceiptForm(false);
+                      setReceiptEmail("");
+                    }}
+                    disabled={isSendingReceipt}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    className="flex-1 bg-printa-red text-white hover:bg-red-700"
+                    onClick={() => void sendReceiptEmail()}
+                    disabled={!isValidReceiptEmail || isSendingReceipt}
+                  >
+                    {isSendingReceipt ? "Sending..." : "Send receipt"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setCompletedSale(null)}>
+              <Button variant="outline" className="flex-1" onClick={() => { setCompletedSale(null); setShowEmailReceiptForm(false); setReceiptEmail(""); }}>
                 New sale
               </Button>
               <Button asChild className="flex-1 bg-printa-red text-white hover:bg-red-700">
