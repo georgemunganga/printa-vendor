@@ -53,7 +53,7 @@ const SubscriptionPage: React.FC = () => {
     ]);
 
     if (tierResult.status === "fulfilled") {
-      setTiers([...tierResult.value].sort((a, b) => a.display_order - b.display_order));
+      setTiers(tierResult.value.filter((tier) => tier.is_available).sort((a, b) => a.display_order - b.display_order));
       setCatalogueError(null);
     } else {
       setTiers([]);
