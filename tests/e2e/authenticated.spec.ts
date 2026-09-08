@@ -43,6 +43,7 @@ test.describe("authenticated vendor session", () => {
       ["/dashboard/orders", "Order History"],
       ["/dashboard/settings", "Store Settings"],
       ["/dashboard/subscription", "Subscription"],
+      ["/dashboard/reports", "Reports"],
     ] as const;
 
     for (const [route, heading] of routes) {

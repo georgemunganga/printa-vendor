@@ -12,6 +12,7 @@ import {
   Users,
   CreditCard,
   Bell,
+  BarChart3,
 } from "lucide-react";
 
 export interface AccessUser {
@@ -105,6 +106,13 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     icon: MessageCircle,
     name: "Messages",
     path: "/dashboard/chat",
+    requiresStore: true,
+  },
+  {
+    icon: BarChart3,
+    name: "Reports",
+    path: "/dashboard/reports",
+    requiredPermissions: ["view_reports"],
     requiresStore: true,
   },
 ];

@@ -29,6 +29,7 @@ const PRIMARY_TABS = [
   "/dashboard/notifications",
   "/dashboard/support",
   "/dashboard/inventory",
+  "/dashboard/reports",
 ];
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, pageTitle, hideMobileBottomNav = false }) => {

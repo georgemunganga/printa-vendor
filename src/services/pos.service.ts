@@ -13,6 +13,10 @@ export interface POSTransactionDto {
 }
 
 export const posService = {
+  listByStore(storeId: string) {
+    return api.get<POSTransactionDto[]>(`/api/v1/pos/stores/${storeId}/transactions`);
+  },
+
   recordPayment(payload: {
     order_id: string;
     store_id: string;

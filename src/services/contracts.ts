@@ -233,6 +233,8 @@ export interface OrderItemDto {
   unit_price: number;
   line_total: number;
   customisation?: Record<string, unknown>;
+  product_name?: string;
+  product_category?: string;
   created_at: ISODateString;
   updated_at: ISODateString;
 }

@@ -35,6 +35,7 @@ import Tracking from "./pages/dashboard/store/Tracking";
 import Chat from "./pages/dashboard/store/Chat";
 import ShiftManagement from "./pages/dashboard/store/ShiftManagement";
 import DashboardV2 from "./pages/dashboard/store/DashboardV2";
+import Reports from "./pages/dashboard/Reports";
 import POSPage from "./pages/dashboard/store/pos/POSPage";
 import Stores from "./pages/dashboard/Stores";
 import VendorOnboarding from "./pages/dashboard/VendorOnboarding";
@@ -136,6 +137,7 @@ const App = () => {
                   <Route path="/upload" element={<ProtectedRoute routeScope="store"><Upload /></ProtectedRoute>} />
                   <Route path="/dashboard" element={<ProtectedRoute routeScope="root"><Stores /></ProtectedRoute>} />
                   <Route path="/dashboard/store" element={<ProtectedRoute routeScope="store"><DashboardV2 /></ProtectedRoute>} />
+                  <Route path="/dashboard/reports" element={<ProtectedRoute routeScope="store" requiredPermission="view_reports"><Reports /></ProtectedRoute>} />
                   <Route path="/dashboard-old" element={<ProtectedRoute routeScope="store"><Dashboard /></ProtectedRoute>} />
                   <Route path="/dashboard/job-feed" element={<Navigate to="/dashboard/orders" replace />} />
                   <Route path="/dashboard/orders" element={<ProtectedRoute routeScope="store"><OrderHistory /></ProtectedRoute>} />
