@@ -38,6 +38,7 @@ import { posService } from "@/services/pos.service";
 import { commsService } from "@/services/comms.service";
 import { isPrintProduct, orderKindNote } from "@/lib/order-kind";
 import { formatMoney } from "@/lib/money";
+import { playOperationalSound, unlockOperationalSound } from "@/lib/operational-sound";
 import type { OrderDto } from "@/services/contracts";
 
 interface ServiceCategory {
@@ -213,6 +214,7 @@ const POSPage: React.FC = () => {
 
   const handleCharge = async (): Promise<boolean> => {
     if (!order.length || isCharging) return false;
+    unlockOperationalSound();
     if (!activeStore?.id) {
       toast.error("Live POS checkout requires an available store inventory connection.");
       return false;
@@ -244,12 +246,14 @@ const POSPage: React.FC = () => {
         completedAt: new Date(),
       });
       toast.success(`Sale complete: ${formatMoney(createdOrder.total, createdOrder.currency)}`);
+      playOperationalSound("success");
       setOrder([]);
       setShowMobileOrder(false);
       resetCartId();
       setCatalogueReloadKey((current) => current + 1);
       return true;
     } catch (error) {
+      playOperationalSound("error");
       toast.error(error instanceof Error ? error.message : "Unable to complete the POS transaction.");
       return false;
     } finally {
@@ -364,6 +368,7 @@ const POSPage: React.FC = () => {
       setShowEmailReceiptForm(false);
       setReceiptEmail("");
     } catch (error) {
+      playOperationalSound("error");
       toast.error(error instanceof Error ? error.message : "Unable to send the receipt email.");
     } finally {
       setIsSendingReceipt(false);

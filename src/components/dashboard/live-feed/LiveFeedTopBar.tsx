@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import { Volume2, VolumeX } from "lucide-react";
+import { unlockOperationalSound } from "@/lib/operational-sound";
 
 interface LiveFeedTopBarProps {
   isOnline: boolean;
@@ -167,7 +168,10 @@ export const LiveFeedTopBar: React.FC<LiveFeedTopBarProps> = ({
 
       {/* Sound toggle */}
       <button
-        onClick={onToggleSound}
+        onClick={() => {
+          unlockOperationalSound();
+          onToggleSound();
+        }}
         className="flex items-center justify-center h-[36px] w-[36px] md:h-9 md:w-9 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 active:scale-95 transition-all bg-white shrink-0"
         aria-label={soundEnabled ? "Mute sounds" : "Enable sounds"}
       >

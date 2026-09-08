@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Inbox, Layers, WifiOff } from "lucide-react";
@@ -20,6 +20,7 @@ import { inventoryService } from "@/services/inventory.service";
 import { catalogService } from "@/services/catalog.service";
 import { buildStoreProductDisplayMap } from "@/lib/order-display";
 import { mapOrderToPrintJob } from "@/lib/print-job";
+import { areOperationalSoundsEnabled, playOperationalSound, setOperationalSoundsEnabled, unlockOperationalSound } from "@/lib/operational-sound";
 
 const addHistory = (job: PrintJob, status: PrintJobStatus) => {
   const history = job.statusHistory ? [...job.statusHistory] : [];
@@ -32,11 +33,23 @@ const DashboardV2: React.FC = () => {
 
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [isOnline, setIsOnline] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(areOperationalSoundsEnabled);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const knownOrderIdsRef = useRef<Set<string> | null>(null);
+  const soundEnabledRef = useRef(soundEnabled);
+
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    if (!activeStore?.id || !isOnline) return undefined;
+    const timer = window.setInterval(() => setReloadKey((key) => key + 1), 15000);
+    return () => window.clearInterval(timer);
+  }, [activeStore?.id, isOnline]);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +60,7 @@ const DashboardV2: React.FC = () => {
           setJobs([]);
           setJobsError(null);
           setIsLoadingJobs(false);
+          knownOrderIdsRef.current = null;
         }
         return;
       }
@@ -63,6 +77,16 @@ const DashboardV2: React.FC = () => {
         ]);
         const productMap = buildStoreProductDisplayMap(storeProducts, catalogueProducts);
         if (!cancelled) {
+          const orderIds = new Set(orders.map((order) => order.id));
+          const previousOrderIds = knownOrderIdsRef.current;
+          if (previousOrderIds && soundEnabledRef.current) {
+            const hasNewOrder = [...orderIds].some((id) => !previousOrderIds.has(id));
+            if (hasNewOrder) {
+              playOperationalSound("new-order");
+              toast.info("New order received");
+            }
+          }
+          knownOrderIdsRef.current = orderIds;
           setJobs(orders.map((order) => mapOrderToPrintJob(order, productMap)).filter((job) => job.orderKind === "print_job"));
         }
       } catch (error) {
@@ -296,7 +320,12 @@ const DashboardV2: React.FC = () => {
               toast(isOnline ? "You are now offline" : "You are now accepting print jobs");
             }}
             soundEnabled={soundEnabled}
-            onToggleSound={() => setSoundEnabled((p) => !p)}
+            onToggleSound={() => {
+              const next = !soundEnabled;
+              setSoundEnabled(next);
+              setOperationalSoundsEnabled(next);
+              if (next) unlockOperationalSound();
+            }}
           />
         </div>
 
