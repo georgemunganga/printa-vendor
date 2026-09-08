@@ -152,12 +152,7 @@ export const SECONDARY_NAV_ITEMS: NavItem[] = [
   },
   {
     icon: HelpCircle,
-    name: "Support",
-    path: "/dashboard/support",
-  },
-  {
-    icon: HelpCircle,
-    name: "Help",
+    name: "Help & Support",
     path: "/dashboard/help",
   },
 ];

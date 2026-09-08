@@ -44,8 +44,8 @@ import Inventory from "./pages/dashboard/Inventory";
 import Notifications from "./pages/dashboard/Notifications";
 import HelpCenter from "./pages/dashboard/help/HelpCenter";
 import FAQ from "./pages/dashboard/help/FAQ";
-import FixAProblem from "./pages/dashboard/help/FixAProblem";
-import DownloadingSavingSharing from "./pages/dashboard/help/DownloadingSavingSharing";
+import HelpTopic from "./pages/dashboard/help/HelpTopic";
+import HelpArticle from "./pages/dashboard/help/HelpArticle";
 import { StoreEntrypoint } from "./pages/StoreEntrypoint";
 import { NotificationProvider } from "@/context/notification-context";
 import { JobProvider } from "@/context/job-context";
@@ -196,8 +196,11 @@ const App = () => {
                   />
                   <Route path="/dashboard/help" element={<ProtectedRoute routeScope="root"><HelpCenter /></ProtectedRoute>} />
                   <Route path="/dashboard/help/faq" element={<ProtectedRoute routeScope="root"><FAQ /></ProtectedRoute>} />
-                  <Route path="/dashboard/help/fix-a-problem" element={<ProtectedRoute routeScope="root"><FixAProblem /></ProtectedRoute>} />
-                  <Route path="/dashboard/help/downloading-saving-sharing" element={<ProtectedRoute routeScope="root"><DownloadingSavingSharing /></ProtectedRoute>} />
+                  <Route path="/dashboard/help/fix-a-problem" element={<Navigate to="/dashboard/help/troubleshooting" replace />} />
+                  <Route path="/dashboard/help/downloading-saving-sharing" element={<Navigate to="/dashboard/help/pos-and-receipts/print-or-email-a-receipt" replace />} />
+                  <Route path="/dashboard/help/article/:articleId" element={<Navigate to="/dashboard/help" replace />} />
+                  <Route path="/dashboard/help/:topicSlug/:articleSlug" element={<ProtectedRoute routeScope="root"><HelpArticle /></ProtectedRoute>} />
+                  <Route path="/dashboard/help/:topicSlug" element={<ProtectedRoute routeScope="root"><HelpTopic /></ProtectedRoute>} />
                   <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
 
                   {/* Store-specific entrypoint - matches /:storeName */}

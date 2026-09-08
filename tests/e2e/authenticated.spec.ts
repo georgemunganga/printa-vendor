@@ -87,6 +87,10 @@ test.describe("authenticated vendor session", () => {
       "/dashboard/notifications",
       "/dashboard/help",
       "/dashboard/help/faq",
+      "/dashboard/help/orders-and-print-jobs",
+      "/dashboard/help/orders-and-print-jobs/print-jobs-and-till-sales",
+      "/dashboard/help/pos-and-receipts/print-or-email-a-receipt",
+      "/dashboard/help/inventory/printa-and-custom-inventory",
     ] as const;
 
     for (const route of routes) {

@@ -1,307 +1,116 @@
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import {
-  Search,
-  FileQuestion,
-  Download,
-  AlertCircle,
-  BookOpen,
-  GraduationCap,
-  MessageCircleQuestion,
-  ArrowRight,
-  TrendingUp,
-  Settings,
-  CreditCard,
-  Users,
-  Printer,
-  Package,
-} from "lucide-react";
+import { ArrowRight, LifeBuoy, Search, X } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { FEATURED_ARTICLES, getHelpArticle, HELP_TOPICS, searchHelp } from "@/content/vendor-help";
+import { HelpTopicIcon } from "./help-ui";
 
-const HELP_TOPICS = [
-  {
-    id: "account-settings",
-    title: "Account Settings",
-    description: "Manage your account, profile, and preferences",
-    icon: Settings,
-    path: "/dashboard/help/account-settings",
-    color: "text-printa-red",
-    bgColor: "bg-printa-red/10",
-  },
-  {
-    id: "payments",
-    title: "Payments, Pricing & Billing",
-    description: "Subscription plans, invoices, and payment methods",
-    icon: CreditCard,
-    path: "/dashboard/help/payments",
-    color: "text-printa-red",
-    bgColor: "bg-printa-red/10",
-  },
-  {
-    id: "teams",
-    title: "Teams and Groups",
-    description: "Add members, manage roles, and permissions",
-    icon: Users,
-    path: "/dashboard/help/teams",
-    color: "text-printa-red",
-    bgColor: "bg-printa-red/10",
-  },
-  {
-    id: "downloads",
-    title: "Downloading, Saving & Sharing",
-    description: "Export data, save templates, and share files",
-    icon: Download,
-    path: "/dashboard/help/downloading-saving-sharing",
-    color: "text-printa-red",
-    bgColor: "bg-printa-red/10",
-  },
-  {
-    id: "pos-orders",
-    title: "POS & Orders",
-    description: "Process orders, manage queue, and track jobs",
-    icon: Printer,
-    path: "/dashboard/help/pos-orders",
-    color: "text-printa-red",
-    bgColor: "bg-printa-red/10",
-  },
-  {
-    id: "stores",
-    title: "Store Management",
-    description: "Set up stores, manage inventory, and locations",
-    icon: Package,
-    path: "/dashboard/help/stores",
-    color: "text-printa-red",
-    bgColor: "bg-printa-red/10",
-  },
-  {
-    id: "fix-problem",
-    title: "Fix a Problem",
-    description: "Troubleshoot issues and find solutions",
-    icon: AlertCircle,
-    path: "/dashboard/help/fix-a-problem",
-    color: "text-printa-red",
-    bgColor: "bg-printa-red/10",
-  },
-  {
-    id: "faq",
-    title: "FAQ",
-    description: "Frequently asked questions and quick answers",
-    icon: FileQuestion,
-    path: "/dashboard/help/faq",
-    color: "text-printa-red",
-    bgColor: "bg-printa-red/10",
-  },
-];
-
-const QUICK_QUESTIONS = [
-  "How do I accept orders?",
-  "Set up my first store",
-  "Add team members",
-  "Change my subscription",
-  "Export my data",
-  "Contact support",
-];
-
-const POPULAR_ARTICLES = [
-  {
-    id: "1",
-    title: "How to accept and manage print orders",
-    category: "Getting Started",
-    views: "1.2k",
-  },
-  {
-    id: "2",
-    title: "Setting up your first store",
-    category: "Store Management",
-    views: "980",
-  },
-  {
-    id: "3",
-    title: "Understanding payment processing",
-    category: "Payments",
-    views: "850",
-  },
-  {
-    id: "4",
-    title: "Managing team members and permissions",
-    category: "Team",
-    views: "720",
-  },
-];
-
-const HelpCenter: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Searching for:", searchQuery);
-  };
-
-  const handleQuickQuestion = (question: string) => {
-    setSearchQuery(question);
-    // TODO: Implement search
-  };
+const HelpCenter = () => {
+  const [query, setQuery] = useState("");
+  const results = useMemo(() => searchHelp(query), [query]);
+  const featured = FEATURED_ARTICLES.map(([topicSlug, articleSlug]) => getHelpArticle(topicSlug, articleSlug))
+    .filter((item) => item.topic && item.article);
 
   return (
-    <DashboardLayout title="Help Center">
-      <div className="min-h-screen">
-        {/* Hero Section */}
-        <div className="relative overflow-hidden">
-          <div className="relative max-w-4xl mx-auto px-4 md:px-6 py-10 pt-6 md:py-14 md:pt-4 lg:pt-4  text-center">
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-4xl md:text-6xl font-bold text-gray-900 mb-4"
-            >
-              Get help with <span className="text-printa-red"> anything</span>
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="text-lg md:text-xl text-gray-600 mb-10"
-            >
-              Ask questions. Find answers. Get back to printing.
-            </motion.p>
+    <DashboardLayout pageTitle="Help & Support">
+      <div className="mx-auto max-w-6xl space-y-8">
+        <header className="rounded-3xl bg-gray-950 px-5 py-10 text-center text-white sm:px-8 md:py-14">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+            <LifeBuoy size={25} />
+          </div>
+          <h1 className="text-3xl font-bold md:text-5xl">How can we help?</h1>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-white/65 md:text-base">
+            Find instructions for Printa vendor onboarding, stores, print jobs, till sales, inventory, staff, and subscriptions.
+          </p>
+          <div className="relative mx-auto mt-7 max-w-2xl text-gray-900">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={19} />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search help, for example: custom inventory"
+              aria-label="Search Printa help"
+              className="h-14 w-full rounded-2xl border border-white/10 bg-white pl-12 pr-12 text-sm shadow-xl outline-none transition focus:ring-2 focus:ring-printa-red"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery("")} aria-label="Clear help search" className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+                <X size={17} />
+              </button>
+            )}
+          </div>
+          <Link to="/dashboard/help/faq" className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/15">
+            Browse frequently asked questions <ArrowRight size={14} />
+          </Link>
+        </header>
 
-            {/* Search Bar */}
-            <motion.form
-              onSubmit={handleSearch}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="max-w-2xl mx-auto mb-8"
-            >
-              <div className="relative">
-                <Search
-                  className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={22}
-                />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="What do you need help with?"
-                  className="w-full pl-14 pr-5 py-5 rounded-2xl bg-white text-gray-900 placeholder-gray-400 shadow-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-lg"
-                />
+        {query.trim() ? (
+          <section aria-live="polite">
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Search results</h2>
+                <p className="mt-1 text-sm text-gray-500">{results.length} {results.length === 1 ? "article" : "articles"} found</p>
               </div>
-            </motion.form>
-
-            {/* Quick Questions */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <p className="text-sm text-gray-500 mb-4">Try asking</p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {QUICK_QUESTIONS.map((question) => (
-                  <button
-                    key={question}
-                    onClick={() => handleQuickQuestion(question)}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm font-medium hover:bg-gray-200 transition border border-gray-200"
-                  >
-                    {question}
-                  </button>
+            </div>
+            {results.length > 0 ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {results.map(({ topic, article }) => (
+                  <Link key={`${topic.slug}/${article.slug}`} to={`/dashboard/help/${topic.slug}/${article.slug}`} className="group rounded-2xl border border-gray-100 bg-white p-5 transition hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-md">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-printa-red">{topic.title}</p>
+                    <h3 className="mt-2 font-bold text-gray-900 group-hover:text-printa-red">{article.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-gray-500">{article.summary}</p>
+                  </Link>
                 ))}
               </div>
-            </motion.div>
-          </div>
-        </div>
-
-        {/* Browse by Topic */}
-        <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-10">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-8">
-            Browse by topic
-          </h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-16">
-            {HELP_TOPICS.map((topic, index) => {
-              const Icon = topic.icon;
-
-              return (
-                <motion.div
-                  key={topic.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <Link
-                    to={topic.path}
-                    className="block bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-lg hover:border-gray-200 hover:-translate-y-1 transition-all group h-full"
-                  >
-                    <div
-                      className={`w-14 h-14 rounded-2xl ${topic.bgColor} ${topic.color} flex items-center justify-center mb-4 group-hover:scale-110 transition`}
-                    >
-                      <Icon size={26} strokeWidth={1.5} />
-                    </div>
-                    <h3 className="text-base font-bold text-gray-900 mb-2">
-                      {topic.title}
-                    </h3>
-                    <p className="text-sm text-gray-500 leading-relaxed">
-                      {topic.description}
-                    </p>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center">
+                <h3 className="font-semibold text-gray-900">No matching help article</h3>
+                <p className="mt-2 text-sm text-gray-500">Try a shorter search or send the issue to Printa Support.</p>
+                <Link to="/dashboard/support" className="mt-5 inline-flex items-center gap-2 font-semibold text-printa-red">Contact support <ArrowRight size={16} /></Link>
+              </div>
+            )}
+          </section>
+        ) : (
+          <>
+            <section>
+              <h2 className="mb-5 text-xl font-bold text-gray-900 md:text-2xl">Browse by topic</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {HELP_TOPICS.map((topic) => (
+                  <Link key={topic.slug} to={`/dashboard/help/${topic.slug}`} className="group rounded-2xl border border-gray-100 bg-white p-5 transition hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-md">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-printa-red/10 text-printa-red"><HelpTopicIcon name={topic.icon} /></div>
+                    <h3 className="mt-4 font-bold text-gray-900 group-hover:text-printa-red">{topic.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-gray-500">{topic.description}</p>
+                    <p className="mt-4 text-xs font-semibold text-gray-400">{topic.articles.length} {topic.articles.length === 1 ? "article" : "articles"}</p>
                   </Link>
-                </motion.div>
-              );
-            })}
-          </div>
+                ))}
+              </div>
+            </section>
 
-          {/* Recommended Tutorials */}
-          <div className="mb-12">
-            <div className="flex items-center gap-2 mb-6">
-              <GraduationCap size={24} className="text-gray-900" />
-              <h2 className="text-2xl font-bold text-gray-900">
-                Recommended tutorials
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {POPULAR_ARTICLES.map((article) => (
-                <Link
-                  key={article.id}
-                  to={`/dashboard/help/article/${article.id}`}
-                  className="flex items-start gap-4 p-5 bg-gray-50 rounded-2xl hover:bg-gray-100 transition group"
-                >
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-purple-600 transition">
-                      {article.title}
-                    </h3>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <span>{article.category}</span>
-                      <span>•</span>
-                      <span>{article.views} views</span>
+            <section>
+              <h2 className="mb-5 text-xl font-bold text-gray-900 md:text-2xl">Start here</h2>
+              <div className="grid gap-3 md:grid-cols-2">
+                {featured.map(({ topic, article }) => topic && article && (
+                  <Link key={`${topic.slug}/${article.slug}`} to={`/dashboard/help/${topic.slug}/${article.slug}`} className="group flex items-start gap-4 rounded-2xl border border-gray-100 bg-white p-5 transition hover:border-gray-200 hover:shadow-sm">
+                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-700"><HelpTopicIcon name={topic.icon} size={18} /></div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-gray-400">{topic.title}</p>
+                      <h3 className="mt-1 font-semibold text-gray-900 group-hover:text-printa-red">{article.title}</h3>
+                      <p className="mt-1 line-clamp-2 text-sm text-gray-500">{article.summary}</p>
                     </div>
-                  </div>
-                  <ArrowRight
-                    size={20}
-                    className="text-gray-300 group-hover:text-purple-600 group-hover:translate-x-1 transition flex-shrink-0 mt-1"
-                  />
-                </Link>
-              ))}
-            </div>
-          </div>
+                    <ArrowRight className="mt-2 shrink-0 text-gray-300 transition group-hover:translate-x-1 group-hover:text-printa-red" size={18} />
+                  </Link>
+                ))}
+              </div>
+            </section>
+          </>
+        )}
 
-          {/* Still Need Help */}
-          <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl p-8 md:p-12 text-center text-white">
-            <MessageCircleQuestion size={48} className="mx-auto mb-4 opacity-90" />
-            <h2 className="text-2xl md:text-3xl font-bold mb-3">
-              Still need help?
-            </h2>
-            <p className="text-gray-300 mb-6 max-w-xl mx-auto">
-              Can't find what you're looking for? Our support team is here to
-              help you.
-            </p>
-            <Link
-              to="/dashboard/support"
-              className="inline-flex items-center gap-2 bg-white text-gray-900 px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition text-lg"
-            >
-              Contact Support
-              <ArrowRight size={20} />
-            </Link>
+        <section className="flex flex-col items-start justify-between gap-5 rounded-3xl bg-printa-red p-6 text-white sm:flex-row sm:items-center md:p-8">
+          <div>
+            <h2 className="text-xl font-bold">Need help with a specific account or order?</h2>
+            <p className="mt-2 max-w-2xl text-sm text-white/75">Send a support request from your signed-in vendor account so Printa can identify the requester and investigate.</p>
           </div>
-        </div>
+          <Link to="/dashboard/support" className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-gray-900 hover:bg-gray-100">Contact support <ArrowRight size={17} /></Link>
+        </section>
       </div>
     </DashboardLayout>
   );
