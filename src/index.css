@@ -68,6 +68,39 @@
     --ring: 217.2 32.6% 17.5%;
   }
 }
+
+/* Reports use a restrained layered-card treatment inspired by the reference
+   dashboard. The offset is deliberately shallow so controls remain practical. */
+.reports-depth-card {
+  position: relative;
+  isolation: isolate;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.reports-depth-card::before {
+  position: absolute;
+  z-index: -1;
+  content: "";
+  inset: 6px -5px -6px 5px;
+  border-radius: 1rem;
+  background: #f3f4f6;
+  opacity: .9;
+}
+
+.reports-depth-card--red::before { background: #fecaca; }
+.reports-depth-card--orange::before { background: #fed7aa; }
+.reports-depth-card--violet::before { background: #ddd6fe; }
+
+@media (hover: hover) and (pointer: fine) {
+  .reports-depth-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px -18px rgba(17, 24, 39, .45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reports-depth-card { transition: none; }
+}
  
 @layer base {
   * {
